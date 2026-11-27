@@ -1,0 +1,28 @@
+name: Live Pages verification
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/check_live.py'
+      - '.github/workflows/live-check.yml'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Expected site mode
+        type: choice
+        options: [preview, indexed]
+        default: preview
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify HTTPS pages and security
+        env:
+          EXPECTED_MODE: ${{ inputs.mode || 'preview' }}
+        run: |
+          python3 -m py_compile scripts/check_live.py
+          python3 scripts/check_live.py --mode "$EXPECTED_MODE"
