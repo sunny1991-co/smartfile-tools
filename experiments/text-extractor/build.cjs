@@ -11,4 +11,4 @@ for(const lang of ['eng','hin'])copy('@tesseract.js-data/'+lang+'/4.0.0_best_int
 for(const name of ['pdfjs-dist','tesseract.js','tesseract.js-core','@tesseract.js-data/eng','@tesseract.js-data/hin']){
 const source=path.join(nm,name);const licenses=fs.readdirSync(source).filter(x=>/^(license|notice|copying)/i.test(x));for(const file of licenses)copy(name+'/'+file,'licenses/'+name+'/'+file);}
 let sizes=[];function walk(p){for(const x of fs.readdirSync(p,{withFileTypes:true})){const full=path.join(p,x.name);if(x.isDirectory())walk(full);else sizes.push({file:path.relative(out,full),bytes:fs.statSync(full).size});}}walk(out);
-console.log(JSON.stringify(sizes,null,2));if(sizes.some(x=>x.bytes>25*1024*1024))throw Error('Asset exceeds 25 MiB preview limit');
+console.log(JSON.stringify(sizes,null,2));console.log('OCR_ASSETS_BYTES',sizes.filter(x=>x.file.startsWith('vendor/ocr/')).reduce((a,x)=>a+x.bytes,0));console.log('PDF_ASSETS_BYTES',sizes.filter(x=>x.file.startsWith('vendor/pdf/')).reduce((a,x)=>a+x.bytes,0));if(sizes.some(x=>x.bytes>25*1024*1024))throw Error('Asset exceeds 25 MiB preview limit');
