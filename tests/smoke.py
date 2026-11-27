@@ -30,7 +30,7 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
         with page.expect_download() as event: page.locator('#result a').click()
         path=d/name;event.value.save_as(path);return path
     page.goto(base)
-    assert page.locator('.tile').count()==8
+    assert page.locator('.tile').count()==10
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     for kb in (20,50,100,200):
         go('compress');page.locator('#files').set_input_files(str(fixture));page.locator(f'[data-kb="{kb}"]').click();run()
@@ -41,6 +41,10 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
         assert Image.open(get(slug+'.jpg')).size==wh
     go('crop');page.locator('#files').set_input_files(str(fixture));page.locator('#x').fill('630');page.locator('button[type=submit]').click();page.wait_for_function("document.querySelector('#status').className==='error'")
     go('image-to-pdf');page.locator('#files').set_input_files([str(fixture),str(d/'resize.jpg')]);run();reader=PdfReader(get('output.pdf'));assert len(reader.pages)==2;assert all(len(x.images)==1 for x in reader.pages)
+    go('convert');page.locator('#files').set_input_files(str(fixture));page.locator('#format').select_option('image/webp');run();im=Image.open(get('converted.webp'));assert im.format=='WEBP' and im.size==(640,480)
+    alpha=d/'alpha.png';Image.new('RGBA',(32,32),(255,0,0,0)).save(alpha)
+    go('convert');page.locator('#files').set_input_files(str(alpha));page.locator('#format').select_option('image/png');run();im=Image.open(get('alpha-output.png')).convert('RGBA');assert im.getpixel((0,0))[3]==0
+    go('inspect');page.locator('#files').set_input_files(str(fixture));run();assert '640 × 480 pixels' in page.locator('#result').inner_text();assert '4:3' in page.locator('#result').inner_text();assert str(fixture.stat().st_size)+' bytes' in page.locator('#result').inner_text()
     go('age');page.locator('#birth').fill('2000-02-29');page.locator('#asof').fill('2023-02-28');run();assert '23 years, 0 months, 0 days' in page.locator('#result').inner_text()
     go('words');page.locator('#text').fill('hello world\nthree');run();assert '3 words' in page.locator('#result').inner_text()
     assert not errors,errors;assert not external,external

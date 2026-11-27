@@ -1,3 +1,3 @@
-# Verification status
+# Verification status — v0.2 development
 
-Pre-launch candidate. Prior ZIP had offline calendar, PDF and static checks, but this reconstructed branch is not byte-identical. Run this branch's own static and browser tests before launch. No deployment, ad approval or revenue verified.
+Ten tool implementations and 14 generated pages. New: browser image converter (JPEG/PNG/WebP), image size inspector and tests for transparent PNG, WebP and original dimensions/bytes. The previous GitHub Actions runs 46032839282 and 46032832854 failed before any recorded steps, with no runner name and unavailable logs. Cause unconfirmed. The container cannot resolve GitHub; its browser blocks localhost navigation. The older local ZIP calendar checks passed, but that is not proof of this branch. No claim of browser-test success or readiness to launch. Manual independent test instructions are in README. Ads and deployment disabled. PDF merge/split, QR and Hindi remain pending.

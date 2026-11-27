@@ -1,6 +1,6 @@
 # SmartFile Tools — pre-launch v0.1
 
-Static, mobile-first browser utilities. Eight tools: compression (20/50/100/200 KB presets), resize, signature, crop, ID photo crop, images to PDF, age and word count. No account, external runtime dependencies, paid API, ads or file uploads.
+Static, mobile-first browser utilities. Ten tools: compression (20/50/100/200 KB presets), resize, signature, crop, ID photo crop, images to PDF, image format conversion, image size inspection, age and word count. No account, external runtime dependencies, paid API, ads or file uploads.
 
 ## Local preview (Termux)
 Install Python and Node.js if needed: `pkg install python nodejs`.
