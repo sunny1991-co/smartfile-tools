@@ -4,7 +4,8 @@ from tempfile import TemporaryDirectory
 from functools import partial
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from time import perf_counter
-import hashlib, json, random, re, threading
+import hashlib, json, random, re, threading, subprocess
+from PIL import ImageChops
 from PIL import Image
 from pypdf import PdfReader, PdfWriter
 from pypdf.generic import DictionaryObject, NameObject, DecodedStreamObject
@@ -32,11 +33,45 @@ def text_pdf(path):
 def pixel_digest(page):
     return [hashlib.sha256(im.image.convert('RGB').tobytes()).hexdigest() for im in page.images]
 
+def render(path,number,work):
+    prefix=work/'rendered'
+    subprocess.run(['pdftoppm','-f',str(number),'-l',str(number),'-r','72','-cropbox','-png','-singlefile',str(path),str(prefix)],check=True,capture_output=True,timeout=20)
+    with Image.open(prefix.with_suffix('.png')) as im:return im.convert('RGB')
+
+def same_visual(a,b):
+    assert a.size==b.size,(a.size,b.size)
+    assert ImageChops.difference(a,b).getbbox() is None,'Rendered page changed unexpectedly'
+
+def rotation_fixture(path):
+    w=PdfWriter()
+    for angle in (0,90,180,270):
+        pg=w.add_blank_page(width=420,height=620)
+        pg.cropbox.lower_left=(20,30)
+        pg.cropbox.upper_right=(400,580)
+        pg.rotate(angle)
+    with path.open('wb') as fp:w.write(fp)
+
+def overlay_check(path,source,work,kind):
+    for n in range(1,5):
+        original=render(source,n,work);edited=render(path,n,work)
+        assert original.size==edited.size
+        w,h=edited.size
+        bounds=ImageChops.difference(original,edited).getbbox()
+        assert bounds is not None,('overlay missing',kind,n)
+        x0,y0,x1,y1=bounds
+        assert abs((x0+x1)/2-w/2)<w*.05,(kind,n,bounds)
+        if kind=='watermark':
+            assert y0>h*.35 and y1<h*.65,(kind,n,bounds)
+            assert x1-x0>y1-y0,(kind,n,'not horizontal',bounds)
+        else:
+            assert y0>h*.88 and y1<h,(kind,n,bounds)
+        original.close();edited.close()
+
 def main():
     server=ThreadingHTTPServer(('127.0.0.1',0),partial(Handler,directory=str(ROOT/'site')))
     threading.Thread(target=server.serve_forever,daemon=True).start()
     base=f'http://127.0.0.1:{server.server_port}'
-    report={'passed':False,'cases':[],'scope':'synthetic Chromium Linux, 4x CPU slowdown; PDF text and image stream fidelity, no visual rendering guarantee'}
+    report={'passed':False,'cases':[],'scope':'synthetic Chromium Linux, 4x CPU slowdown; PDF text and image stream fidelity plus independent Poppler raster comparisons for synthetic fixtures'}
     try:
         with TemporaryDirectory() as tmp,sync_playwright() as p:
             d=Path(tmp);rng=random.Random(42)
@@ -84,18 +119,30 @@ def main():
                 assert [pg.extract_text().strip() for pg in reader.pages[6:]]==[f'Document page {i}' for i in range(1,5)]
             go('merge-pdf');page.locator('#pdf-files').set_input_files([str(scan),str(text)])
             merged=run('merge-scanned-and-text',merged_check,30)
+            for i in range(1,7):same_visual(render(scan,i,d),render(merged,i,d))
+            for i in range(1,5):same_visual(render(text,i,d),render(merged,i+6,d))
+            print('VISUAL PASS all ten merged pages',flush=True)
             go('split-pdf');page.locator('#pdf-files').set_input_files(str(merged));page.locator('#pages').fill('8,2,10')
             def extract_check(path):
                 r=PdfReader(path);assert len(r.pages)==3
                 assert r.pages[0].extract_text().strip()=='Document page 2'
                 assert pixel_digest(r.pages[1])==expected[1]
                 assert r.pages[2].extract_text().strip()=='Document page 4'
-            run('extract-mixed-order',extract_check)
+            extracted=run('extract-mixed-order',extract_check)
+            for i,n in enumerate((8,2,10),1):same_visual(render(merged,n,d),render(extracted,i,d))
+            print('VISUAL PASS extraction order and page appearance',flush=True)
             go('rotate-pdf');page.locator('#pdf-files').set_input_files(str(scan));page.locator('#pages').fill('2,4,6')
             def rotated_check(path):
                 r=PdfReader(path);assert [pg.rotation for pg in r.pages]==[0,90,0,90,0,90]
                 assert [pixel_digest(pg) for pg in r.pages]==expected
-            run('rotate-scanned-content',rotated_check,30)
+            rotated=run('rotate-scanned-content',rotated_check,30)
+            # Compare against independently rendered rotation using pypdf and Poppler.
+            rw=PdfWriter(clone_from=str(scan))
+            for i in (1,3,5):rw.pages[i].rotate(90)
+            reference=d/'rotate-reference.pdf'
+            with reference.open('wb') as fp:rw.write(fp)
+            for i in range(1,7):same_visual(render(reference,i,d),render(rotated,i,d))
+            print('VISUAL PASS all six rotated pages',flush=True)
             go('reorder-pdf');page.locator('#pdf-files').set_input_files(str(text));page.locator('#pages').fill('4,2,1,3')
             run('reorder-text',lambda path:check_text(path,[4,2,1,3]))
             go('remove-pdf-pages');page.locator('#pdf-files').set_input_files(str(text));page.locator('#pages').fill('2,4')
@@ -112,6 +159,12 @@ def main():
                 for i,pg in enumerate(r.pages,1):
                     assert pg.extract_text().splitlines()==[f'Document page {i}',str(i+6)]
             run('number-preserves-text',number_check)
+            fixture=d/'rotation-fixture.pdf';rotation_fixture(fixture)
+            go('watermark-pdf');page.locator('#pdf-files').set_input_files(str(fixture));page.locator('#watermark').fill('TEST')
+            run('visual-watermark-rotations',lambda path:overlay_check(path,fixture,d,'watermark'))
+            go('number-pdf');page.locator('#pdf-files').set_input_files(str(fixture));page.locator('#start-number').fill('7')
+            run('visual-page-number-rotations',lambda path:overlay_check(path,fixture,d,'number'))
+            print('VISUAL PASS centered watermark and bottom page number across four rotations and crop box offsets',flush=True)
             go('background-changer');white=d/'white.png';Image.new('RGB',(100,100),'white').save(white)
             page.locator('#files').set_input_files(str(white));page.locator('button[type=submit]').click()
             expect(page.locator('#status')).to_have_class('error',timeout=5000);assert page.locator('#result a').count()==0

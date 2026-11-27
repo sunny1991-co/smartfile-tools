@@ -25,6 +25,7 @@ jobs:
       - run: python -m playwright install --with-deps chromium
       - run: python tests/smoke.py
       - run: python tests/performance.py
+      - run: sudo apt-get install -y poppler-utils
       - run: python tests/quality.py
 
       - run: npm audit --omit=dev --audit-level=moderate
