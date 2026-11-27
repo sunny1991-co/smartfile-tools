@@ -18,6 +18,7 @@ jobs:
       - run: node scripts/build.cjs
       - run: node --check site/assets/tools.js
       - run: node --check site/assets/photo-studio.js
+      - run: node --check site/assets/background.js && node --check site/assets/background-worker.js
       - run: node tests/static.cjs
       - run: node tests/launch.cjs
       - run: pip install -r tests/requirements.txt

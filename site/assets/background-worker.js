@@ -1,0 +1,14 @@
+"use strict";
+function bounded(im){const s=Math.min(1,1600/Math.max(im.width,im.height));return [Math.max(1,Math.round(im.width*s)),Math.max(1,Math.round(im.height*s))];}
+async function bitmap(file){if(!file||!["image/jpeg","image/png","image/webp"].includes(file.type)||!file.size||file.size>25*1024*1024)throw Error("INVALID_IMAGE");const im=await createImageBitmap(file);if(im.width*im.height>24000000||Math.max(im.width,im.height)>12000){im.close();throw Error("INVALID_IMAGE");}return im;}
+function cut(ctx,w,h,hex,tolerance){const data=ctx.getImageData(0,0,w,h),p=data.data,r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16),n=w*h,seen=new Uint8Array(n),queue=new Int32Array(n);let head=0,tail=0,removed=0;const limit=tolerance*tolerance*3;
+function visit(i){if(seen[i])return;seen[i]=1;const j=i*4,dr=p[j]-r,dg=p[j+1]-g,db=p[j+2]-b;if(p[j+3]===0||dr*dr+dg*dg+db*db<=limit){queue[tail++]=i;if(p[j+3])removed++;p[j+3]=0;}}
+for(let x=0;x<w;x++){visit(x);visit((h-1)*w+x);}for(let y=0;y<h;y++){visit(y*w);visit(y*w+w-1);}
+while(head<tail){const i=queue[head++],x=i%w;if(x>0)visit(i-1);if(x<w-1)visit(i+1);if(i>=w)visit(i-w);if(i<n-w)visit(i+w);}
+if(!removed)throw Error("NO_MATCH");if(!p.some((v,i)=>i%4===3&&v>0))throw Error("EMPTY_SUBJECT");ctx.putImageData(data,0,0);}
+function cover(ctx,im,w,h){const s=Math.max(w/im.width,h/im.height),dw=im.width*s,dh=im.height*s;ctx.drawImage(im,(w-dw)/2,(h-dh)/2,dw,dh);}
+self.onmessage=async e=>{let fg,bg;try{const j=e.data;if(!["plain","transparent"].includes(j.mode)||!["color","image","transparent"].includes(j.background)||!/^#[0-9a-f]{6}$/i.test(j.key)||!/^#[0-9a-f]{6}$/i.test(j.color)||!Number.isInteger(j.tolerance)||j.tolerance<0||j.tolerance>100||![j.scale,j.x,j.y].every(Number.isInteger)||j.scale<25||j.scale>100||j.x<0||j.x>100||j.y<0||j.y>100)throw Error("INVALID_SETTINGS");
+postMessage({type:"progress",stage:"read"});fg=await bitmap(j.file);const [w,h]=bounded(fg),subject=new OffscreenCanvas(w,h),sctx=subject.getContext("2d",{willReadFrequently:true});sctx.drawImage(fg,0,0,w,h);fg.close();fg=null;
+postMessage({type:"progress",stage:"cut"});if(j.mode==="plain")cut(sctx,w,h,j.key,j.tolerance);else{const p=sctx.getImageData(0,0,w,h).data;if(!p.some((v,i)=>i%4===3&&v<255)||!p.some((v,i)=>i%4===3&&v>0))throw Error("NOT_CUTOUT");}
+const out=new OffscreenCanvas(w,h),ctx=out.getContext("2d");if(j.background==="color"){ctx.fillStyle=j.color;ctx.fillRect(0,0,w,h);}else if(j.background==="image"){bg=await bitmap(j.scene);cover(ctx,bg,w,h);bg.close();bg=null;}
+const sw=w*j.scale/100,sh=h*j.scale/100;ctx.drawImage(subject,(w-sw)*j.x/100,(h-sh)*j.y/100,sw,sh);subject.width=subject.height=1;postMessage({type:"progress",stage:"save"});const blob=await out.convertToBlob({type:"image/png"});out.width=out.height=1;postMessage({type:"done",blob,w,h});}catch(err){postMessage({type:"error",code:err.message});}finally{fg?.close();bg?.close();}};
