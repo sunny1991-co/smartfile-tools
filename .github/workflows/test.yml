@@ -15,9 +15,16 @@ jobs:
         with:
           python-version: '3.12'
       - run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Record generated dependency lock
+        run: |
+          echo SMARTFILE_LOCK_BEGIN
+          cat package-lock.json
+          echo SMARTFILE_LOCK_END
       - run: node scripts/build.cjs
       - run: node --check site/assets/tools.js
       - run: node tests/static.cjs
       - run: pip install -r tests/requirements.txt
       - run: python -m playwright install --with-deps chromium
       - run: python tests/smoke.py
+
+      - run: npm audit --omit=dev --audit-level=high
