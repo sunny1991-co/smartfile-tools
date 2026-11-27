@@ -24,3 +24,10 @@ jobs:
       - run: python tests/smoke.py
 
       - run: npm audit --omit=dev --audit-level=moderate
+      - run: python scripts/package_preview.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: smartfile-mobile-preview
+          path: preview-output/
+          if-no-files-found: error
+          retention-days: 7

@@ -90,5 +90,12 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     print('PASS Hindi pages, language links, compression and age results')
     assert not errors,errors;assert not external,external
     print('PASS resize, crop, signature, ID photo, PDF, age, word count and no external requests')
+    screenshots=ROOT/'preview-output'/'screenshots'
+    screenshots.mkdir(parents=True,exist_ok=True)
+    for name,url,width,height in [('home-mobile','/',390,844),('home-desktop','/',1280,900),('hindi-home','/hi/',390,844),('compress-mobile','/tools/compress/',390,844),('pdf-mobile','/tools/merge-pdf/',390,844),('hindi-compress','/hi/tools/compress/',390,844)]:
+        page.set_viewport_size({'width':width,'height':height})
+        page.goto(base+url)
+        page.screenshot(path=str(screenshots/(name+'.png')),full_page=False)
+    assert not errors,errors;assert not external,external
     browser.close()
 server.shutdown()
