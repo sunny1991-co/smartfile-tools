@@ -31,3 +31,6 @@ Six tools now have practical, original guides in both languages. They address li
 
 ## Owner-approved production defaults
 Cloudflare Pages main builds use the approved origin https://smartfile-tools.pages.dev and public support contact; preview/local builds remain noindex. Set LAUNCH_APPROVED=no and redeploy to disable indexing eligibility. The live check runs daily and on demand. Actual Google indexing and revenue are not guaranteed; ads and analytics remain disabled.
+
+## Monetization preparation
+See [monetization readiness](docs/MONETIZATION_READINESS.md). Optional production AdSense meta tag is verification-only; no real publisher ID or ad script configured. Daily live health checks do not measure visitors. Search Console data remains in the owner account.
