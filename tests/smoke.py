@@ -1,7 +1,8 @@
 from pathlib import Path
 import os, tempfile, threading, functools, http.server, random
 from PIL import Image
-from pypdf import PdfReader
+from pypdf import PdfReader, PdfWriter
+import zxingcpp
 from playwright.sync_api import sync_playwright
 ROOT=Path(__file__).resolve().parents[1]
 class Quiet(http.server.SimpleHTTPRequestHandler):
@@ -30,7 +31,7 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
         with page.expect_download() as event: page.locator('#result a').click()
         path=d/name;event.value.save_as(path);return path
     page.goto(base)
-    assert page.locator('.tile').count()==10
+    assert page.locator('.tile').count()==13
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     for kb in (20,50,100,200):
         go('compress');page.locator('#files').set_input_files(str(fixture));page.locator(f'[data-kb="{kb}"]').click();run()
@@ -45,6 +46,21 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     alpha=d/'alpha.png';Image.new('RGBA',(32,32),(255,0,0,0)).save(alpha)
     go('convert');page.locator('#files').set_input_files(str(alpha));page.locator('#format').select_option('image/png');run();im=Image.open(get('alpha-output.png')).convert('RGBA');assert im.getpixel((0,0))[3]==0
     go('inspect');page.locator('#files').set_input_files(str(fixture));run();assert '640 × 480 pixels' in page.locator('#result').inner_text();assert '4:3' in page.locator('#result').inner_text();assert str(fixture.stat().st_size)+' bytes' in page.locator('#result').inner_text()
+    # PDFs with distinct page dimensions make order independently verifiable.
+    for filename, widths in [('one.pdf',[120,140]),('two.pdf',[220])]:
+        writer=PdfWriter()
+        for width in widths: writer.add_blank_page(width=width,height=300)
+        with (d/filename).open('wb') as fp: writer.write(fp)
+    go('merge-pdf');page.locator('#pdf-files').set_input_files([str(d/'one.pdf'),str(d/'two.pdf')]);run()
+    merged=get('merged.pdf');assert [int(x.mediabox.width) for x in PdfReader(merged).pages]==[120,140,220]
+    go('split-pdf');page.locator('#pdf-files').set_input_files(str(merged));page.locator('#pages').fill('3,1');run();assert [int(x.mediabox.width) for x in PdfReader(get('extracted.pdf')).pages]==[220,120]
+    go('split-pdf');page.locator('#pdf-files').set_input_files(str(merged));page.locator('#pages').fill('4');page.locator('button[type=submit]').click();page.wait_for_function("document.querySelector('#status').className==='error'");assert page.locator('#result a').count()==0
+    enc=PdfWriter();enc.add_blank_page(width=120,height=300);enc.encrypt('test-password')
+    with (d/'encrypted.pdf').open('wb') as fp:enc.write(fp)
+    go('split-pdf');page.locator('#pdf-files').set_input_files(str(d/'encrypted.pdf'));page.locator('#pages').fill('1');page.locator('button[type=submit]').click();page.wait_for_function("document.querySelector('#status').className==='error'");assert page.locator('#result a').count()==0
+    for value in ('https://example.com/smartfile','नमस्ते SmartFile'):
+        go('qr');page.locator('#qr-text').fill(value);run();decoded=zxingcpp.read_barcode(Image.open(get('code.png')));assert decoded is not None and decoded.text==value,decoded
+    print('PASS PDF merge/extract, invalid range, encrypted rejection and independently decoded QR')
     go('age');page.locator('#birth').fill('2000-02-29');page.locator('#asof').fill('2023-02-28');run();assert '23 years, 0 months, 0 days' in page.locator('#result').inner_text()
     go('words');page.locator('#text').fill('hello world\nthree');run();assert '3 words' in page.locator('#result').inner_text()
     assert not errors,errors;assert not external,external

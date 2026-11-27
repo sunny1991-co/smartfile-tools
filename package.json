@@ -1,0 +1,9 @@
+{
+  "name": "smartfile-tools",
+  "version": "0.3.0",
+  "private": true,
+  "dependencies": {
+    "pdf-lib": "1.17.1",
+    "qrcode-generator": "1.4.4"
+  }
+}
