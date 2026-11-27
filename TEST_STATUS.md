@@ -1,3 +1,3 @@
-# Verification status — v0.4 preview candidate
+# Verification — pre-launch candidate
 
-Run 46036685902 at 5fe2aea3 passed 34 pages, all 13 core tools, selected Hindi output tests, CSP, launch checks and npm audit (0 known vulnerabilities). This new commit adds a local-only preview ZIP, screenshots and artifact packaging. Its own CI is pending; real Android review and owner launch approval/contact are still required. No deployment, ads or paid spend.
+Commit 2010cbcfd passed CI runs 46036969863 and 46036979102, including 34 pages, all 13 core utilities, selected Hindi results, CSP, npm audit (0 known vulnerabilities), preview ZIP and six screenshots. Artifact 15219790054 exists (expires 2026-12-04). New bilingual help sections and Cloudflare non-main guard await a fresh CI pass. Search volumes are unverified. No merge or deployment performed. Real-device review, public support email and explicit launch approval remain required.

@@ -16,3 +16,6 @@ Verify the production URL in Google Search Console, submit sitemap.xml, then rev
 Apply for AdSense only after owner review of live content, contact and required policies. Review current eligibility, consent, privacy disclosures, ads.txt, supported hosting/domain and CSP before integrating any third-party script. No ad clicks by the operator, purchased traffic or deceptive placements. Record actual revenue and costs separately. There is no income or approval guarantee.
 
 No hosting account, payment or advertising has been configured in this change.
+
+### Cloudflare configuration isolation
+Use `main` as the production branch. Configure SITE_URL, LAUNCH_APPROVED and SITE_CONTACT_EMAIL only in Production. Non-main builds detected via CF_PAGES and CF_PAGES_BRANCH always remain noindex without a sitemap or public contact. Disable automatic preview deployments if not needed or use Cloudflare Access for a private preview. Official build reference: https://developers.cloudflare.com/pages/configuration/build-configuration/ .
