@@ -102,6 +102,19 @@ def main():
             go('split-pdf');page.locator('#pdf-files').set_input_files(pdfs[0]);page.locator('#pages').fill('999');page.locator('button[type=submit]').click()
             expect(page.locator('#status')).to_have_class('error',timeout=5000);expect(page.locator('button[type=submit]')).to_be_enabled();assert page.locator('#result a').count()==0
             page.locator('#pages').fill('1-10');run('recover-after-invalid-range',12,valid_pdf(10))
+            # Hold worker network response to deterministically test cancel before computation.
+            go('merge-pdf');page.locator('#pdf-files').set_input_files(pdfs)
+            page.route('**/assets/pdf-worker.js',lambda route:route.abort())
+            page.locator('button[type=submit]').click()
+            expect(page.locator('#status')).to_have_class('error',timeout=5000)
+            expect(page.locator('button[type=submit]')).to_be_enabled()
+            page.unroute('**/assets/pdf-worker.js')
+            go('merge-pdf');page.locator('#pdf-files').set_input_files(pdfs)
+            # Cancel within the same browser task after the worker starts.
+            page.evaluate("""() => {const b=document.querySelector('#cancel-pdf');const watch=new MutationObserver(()=>{if(!b.hidden){watch.disconnect();b.click()}});watch.observe(b,{attributes:true,attributeFilter:['hidden']});document.querySelector('form').requestSubmit()}""")
+            expect(page.locator('#status')).to_have_text(re.compile(r'^Processing cancelled'),timeout=5000)
+            expect(page.locator('button[type=submit]')).to_be_enabled();assert page.locator('#result a').count()==0
+            run('merge-after-cancel',15,valid_pdf(100))
             assert not errors,errors
             assert not external,external
             browser.close()
