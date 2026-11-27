@@ -58,7 +58,7 @@ def main():
                 assert all('/vendor/' not in x['name'] for x in sizes),sizes
                 total=sum(x['bytes'] for x in sizes)+page.evaluate("performance.getEntriesByType('navigation')[0].transferSize")
                 assert total<=100*1024,('homepage transfer',total)
-                assert page.locator('.tile svg').count()==20
+                assert page.locator('.tile svg').count()==21
                 assert page.locator('#tool-search').is_visible()
                 assert not any('/fonts/' in x['name'] for x in sizes),sizes
                 report['cases'].append({'case':'cold homepage simulated network','seconds':round(elapsed,3),'budget_seconds':5,'transfer_bytes':total})
@@ -103,6 +103,12 @@ def main():
             def valid_studio(path):
                 with Image.open(path) as im:assert im.size==(1440,1920);im.verify()
             run('studio-rotate-filter-export',15,valid_studio)
+            plain=d/'plain-large.png';im=Image.new('RGB',(2400,1800),'white');im.paste((220,30,40),(500,400,1900,1400));im.save(plain)
+            go('background-changer');page.locator('#files').set_input_files(str(plain));page.locator('#background-mode').select_option('transparent')
+            def valid_cutout(path):
+                with Image.open(path).convert('RGBA') as im:
+                    assert im.size==(1600,1200) and im.getpixel((5,5))[3]==0 and im.getpixel((800,600))[3]==255
+            run('plain-background-worker',15,valid_cutout)
             go('photo-sheet');page.locator('#files').set_input_files(str(photo));page.locator('#copies').select_option('12')
             def valid_sheet(path):
                 with Image.open(path) as im:assert im.size==(2480,3508);im.verify()

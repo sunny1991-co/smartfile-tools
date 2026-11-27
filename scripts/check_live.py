@@ -9,9 +9,9 @@ from urllib.parse import urljoin, urlsplit
 from xml.etree import ElementTree
 
 ORIGIN = "https://smartfile-tools.pages.dev"
-TOOLS = "compress resize signature crop passport image-to-pdf age convert inspect merge-pdf split-pdf qr words remove-pdf-pages rotate-pdf reorder-pdf watermark-pdf number-pdf photo-sheet photo-studio".split()
+TOOLS = "compress resize signature crop passport image-to-pdf age convert inspect merge-pdf split-pdf qr words remove-pdf-pages rotate-pdf reorder-pdf watermark-pdf number-pdf photo-sheet photo-studio background-changer".split()
 PAGES = [prefix + suffix for prefix in ("", "/hi") for suffix in ("/", "/privacy/", "/terms/", "/about/", *("/tools/" + t + "/" for t in TOOLS))]
-ASSETS = ["/assets/style.css", "/assets/tools.js", "/assets/library.js", "/assets/photo-studio.js", "/assets/pdf-worker.js", "/assets/icon.svg", "/assets/vendor/pdf-lib.min.js", "/assets/vendor/qrcode.js", "/assets/vendor/THIRD-PARTY-LICENSES.txt"]
+ASSETS = ["/assets/style.css", "/assets/tools.js", "/assets/library.js", "/assets/photo-studio.js", "/assets/background.js", "/assets/background-worker.js", "/assets/pdf-worker.js", "/assets/icon.svg", "/assets/vendor/pdf-lib.min.js", "/assets/vendor/qrcode.js", "/assets/vendor/THIRD-PARTY-LICENSES.txt"]
 
 class Page(HTMLParser):
     def __init__(self, text):

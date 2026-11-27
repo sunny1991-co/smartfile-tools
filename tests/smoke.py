@@ -37,11 +37,11 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
         with page.expect_download() as event: page.locator('#result a').click()
         path=d/name;event.value.save_as(path);return path
     page.goto(base)
-    assert page.locator('.tile').count()==20
-    assert page.locator('.tile .tool-icon svg').count()==20
+    assert page.locator('.tile').count()==21
+    assert page.locator('.tile .tool-icon svg').count()==21
     assert page.locator('.tool-group').count()==3
     shapes=page.locator('.tile svg').evaluate_all("(xs)=>xs.map(x=>x.innerHTML)")
-    assert len(set(shapes))==20
+    assert len(set(shapes))==21
     assert page.locator('.category-nav a').count()==3
     page.locator('.category-nav a').first.click()
     assert page.evaluate("location.hash")=='#group-pdf'
@@ -55,7 +55,7 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     search.fill('photo se pdf');assert page.locator('.tile:visible').count()==1
     search.fill('xyz-no-tool');assert page.locator('.tile:visible').count()==0
     expect(page.locator('#search-status')).to_contain_text('No tools found')
-    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==20
+    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==21
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     for width in (320,390,768,1280):
         page.set_viewport_size({'width':width,'height':844})
@@ -68,7 +68,7 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     for slug,wh in [('resize',(200,150)),('signature',(300,100)),('passport',(413,531)),('crop',(150,120))]:
         go(slug);page.locator('#files').set_input_files(str(fixture));page.locator('#width').fill(str(wh[0]));page.locator('#height').fill(str(wh[1]));run()
         assert Image.open(get(slug+'.jpg')).size==wh
-    go('resize');assert page.locator('.photo-tabs a').count()==7
+    go('resize');assert page.locator('.photo-tabs a').count()==8
     assert page.locator('.photo-tabs a[aria-current=page]').inner_text()=='Resolution'
     page.locator('#files').set_input_files(str(fixture));page.locator('[data-resolution="1280,720"]').click();run()
     assert Image.open(get('hd.jpg')).size==(1280,720)
@@ -87,6 +87,17 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     page.locator('#reset').click();expect(page.locator('#preview-size')).to_have_text('640 × 480 px')
     assert page.locator('#files').evaluate('(x)=>x.files.length')==1
     print('PASS studio preview, rotate, undo/redo, crop, grayscale, resolution and retained photo')
+    cut=d/'plain.png';im=Image.new('RGB',(100,100),'white');im.paste((210,20,30),(30,20,70,80));im.save(cut)
+    scene=d/'scene.png';Image.new('RGB',(100,100),(0,100,230)).save(scene)
+    go('background-changer');page.locator('#files').set_input_files(str(cut));page.locator('#background-mode').select_option('image');page.locator('#scene').set_input_files(str(scene));run()
+    with Image.open(get('background.png')).convert('RGBA') as edited:
+        assert edited.getpixel((5,5))==(0,100,230,255)
+        assert edited.getpixel((50,50))==(210,20,30,255)
+    page.locator('#background-mode').select_option('transparent');run()
+    with Image.open(get('cutout.png')).convert('RGBA') as edited:assert edited.getpixel((5,5))[3]==0 and edited.getpixel((50,50))[3]==255
+    page.locator('#subject-mode').select_option('transparent');page.locator('#files').set_input_files(str(d/'cutout.png'));page.locator('#background-mode').select_option('color');run()
+    with Image.open(get('replaced.png')).convert('RGBA') as edited:assert edited.getpixel((5,5))==(240,245,255,255)
+    print('PASS plain-background cutout, transparency and own-scene compositing pixel checks')
     go('photo-sheet');page.locator('#files').set_input_files(str(fixture));page.locator('#paper').select_option('4x6');page.locator('#copies').select_option('6');run()
     sheet=Image.open(get('sheet-6.jpg'));assert sheet.size==(1200,1800);assert '6 photos' in page.locator('#result').inner_text()
     page.locator('#paper').select_option('a4');page.locator('#copies').select_option('12');run()
@@ -140,11 +151,11 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     assert page.locator('.tile:visible').count()==1
     assert page.locator('.tile:visible').get_attribute('href')=='/hi/tools/signature/'
     page.locator('#clear-search').click()
-    assert page.locator('.tile:visible').count()==20
-    assert page.locator('.tile').count()==20
-    assert page.locator('.tile .tool-icon svg').count()==20
+    assert page.locator('.tile:visible').count()==21
+    assert page.locator('.tile').count()==21
+    assert page.locator('.tile .tool-icon svg').count()==21
     assert page.locator('.tool-group').count()==3
-    for slug in ('compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf','photo-sheet','photo-studio'):
+    for slug in ('compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf','photo-sheet','photo-studio','background-changer'):
         page.goto(base+'/hi/tools/'+slug+'/')
         assert page.locator('html').get_attribute('lang')=='hi'
         assert page.locator('#fields label').count()>0
