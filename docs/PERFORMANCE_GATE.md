@@ -16,3 +16,6 @@ Seven PDF operations run in a fresh local worker, with file objects passed by st
 
 ## Quality freeze (21 tools)
 No numeric growth target. New utilities require demonstrated usefulness and verified reliability. Repeated-use gate: ten 50 KB compression runs, invalid image recovery, stale download invalidation, mixed scanned and text PDF merge/extract/rotate/reorder/remove/watermark/number checks with decoded embedded-image hashes and independent extracted text. All-white cutout must reject empty subject. Existing browser regression and speed gates stay enabled. Canvas cleanup after compression and resize; lock input settings during processing. Test suite is synthetic, not proof of visual PDF rendering, all file types, actual Android memory or perfect background removal. Do not advertise unsupported AI or Hindi font conversion. Real-device tests and independent PDF visual rendering remain pending.
+
+## Independent rendered PDF gate
+Poppler installed in CI only, not the website. Compare rendered pixels at 72 DPI for merged, extracted and rotated synthetic pages against source/reference. Verify watermark center and page number bottom position on cropped pages with all four rotations. No new tools, site scripts or runtime dependencies. Test results pending; not proof of visual fidelity for all PDFs, Hindi fonts, forms, annotations or digital signatures.
