@@ -37,7 +37,7 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
         with page.expect_download() as event: page.locator('#result a').click()
         path=d/name;event.value.save_as(path);return path
     page.goto(base)
-    assert page.locator('.tile').count()==13
+    assert page.locator('.tile').count()==18
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     for width in (320,390,768,1280):
         page.set_viewport_size({'width':width,'height':844})
@@ -68,6 +68,26 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     enc=PdfWriter();enc.add_blank_page(width=120,height=300);enc.encrypt('test-password')
     with (d/'encrypted.pdf').open('wb') as fp:enc.write(fp)
     go('split-pdf');page.locator('#pdf-files').set_input_files(str(d/'encrypted.pdf'));page.locator('#pages').fill('1');page.locator('button[type=submit]').click();expect(page.locator('#status')).to_have_class('error',timeout=30000);assert page.locator('#result a').count()==0
+    go('remove-pdf-pages');page.locator('#pdf-files').set_input_files(str(merged));page.locator('#pages').fill('2');run()
+    assert [int(x.mediabox.width) for x in PdfReader(get('removed.pdf')).pages]==[120,220]
+    go('remove-pdf-pages');page.locator('#pdf-files').set_input_files(str(merged));page.locator('#pages').fill('1-3');page.locator('button[type=submit]').click();expect(page.locator('#status')).to_have_class('error',timeout=30000);assert page.locator('#result a').count()==0
+    go('reorder-pdf');page.locator('#pdf-files').set_input_files(str(merged));page.locator('#pages').fill('3,1,2');run()
+    assert [int(x.mediabox.width) for x in PdfReader(get('reordered.pdf')).pages]==[220,120,140]
+    go('reorder-pdf');page.locator('#pdf-files').set_input_files(str(merged));page.locator('#pages').fill('1,2');page.locator('button[type=submit]').click();expect(page.locator('#status')).to_have_class('error',timeout=30000)
+    go('rotate-pdf');page.locator('#pdf-files').set_input_files(str(merged));page.locator('#pages').fill('2');run()
+    rotated=get('rotated.pdf');assert [x.rotation for x in PdfReader(rotated).pages]==[0,90,0]
+    go('rotate-pdf');page.locator('#pdf-files').set_input_files(str(rotated));page.locator('#rotation').select_option('180');run()
+    assert [x.rotation for x in PdfReader(get('rotate-all.pdf')).pages]==[180,270,180]
+    go('watermark-pdf');page.locator('#pdf-files').set_input_files(str(rotated));page.locator('#watermark').fill('DRAFT');run()
+    assert all('DRAFT' in x.extract_text() for x in PdfReader(get('watermarked.pdf')).pages)
+    go('number-pdf');page.locator('#pdf-files').set_input_files(str(rotated));page.locator('#start-number').fill('7');run()
+    numbered=PdfReader(get('numbered.pdf'));assert [x.extract_text().strip() for x in numbered.pages]==['7','8','9'];assert [x.rotation for x in numbered.pages]==[0,90,0]
+    for slug in ('remove-pdf-pages','reorder-pdf','rotate-pdf','watermark-pdf','number-pdf'):
+        go(slug);page.locator('#pdf-files').set_input_files(str(d/'encrypted.pdf'))
+        if slug in ('remove-pdf-pages','reorder-pdf'):page.locator('#pages').fill('1')
+        if slug=='watermark-pdf':page.locator('#watermark').fill('DRAFT')
+        page.locator('button[type=submit]').click();expect(page.locator('#status')).to_have_class('error',timeout=30000);assert page.locator('#result a').count()==0
+    print('PASS PDF remove, reorder, rotate, watermark, page numbers, invalid selection and encrypted rejection')
     for value in ('https://example.com/smartfile','नमस्ते SmartFile'):
         go('qr');page.locator('#qr-text').fill(value);run();decoded=zxingcpp.read_barcode(Image.open(get('code.png')));assert decoded is not None and decoded.text==value,decoded
     print('PASS PDF merge/extract, invalid range, encrypted rejection and independently decoded QR')
@@ -75,8 +95,8 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     go('words');page.locator('#text').fill('hello world\nthree');run();assert '3 words' in page.locator('#result').inner_text()
     page.goto(base+'/hi/')
     assert page.locator('html').get_attribute('lang')=='hi'
-    assert page.locator('.tile').count()==13
-    for slug in ('compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words'):
+    assert page.locator('.tile').count()==18
+    for slug in ('compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf'):
         page.goto(base+'/hi/tools/'+slug+'/')
         assert page.locator('html').get_attribute('lang')=='hi'
         assert page.locator('#fields label').count()>0
@@ -87,7 +107,10 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     assert get('hi-20.jpg').stat().st_size<=20*1024
     page.goto(base+'/hi/tools/age/');page.locator('#birth').fill('2000-02-29');page.locator('#asof').fill('2023-02-28');page.locator('button[type=submit]').click()
     expect(page.locator('#result')).to_contain_text('23 साल, 0 महीने, 0 दिन')
-    print('PASS Hindi pages, language links, compression and age results')
+    page.goto(base+'/hi/tools/rotate-pdf/');page.locator('#pdf-files').set_input_files(str(merged));page.locator('button[type=submit]').click()
+    expect(page.locator('#status')).to_have_text('तैयार। अपना परिणाम जांचें।',timeout=30000)
+    assert [x.rotation for x in PdfReader(get('hi-rotated.pdf')).pages]==[90,90,90]
+    print('PASS Hindi pages, language links, compression, age and rotation results')
     assert not errors,errors;assert not external,external
     print('PASS resize, crop, signature, ID photo, PDF, age, word count and no external requests')
     screenshots=ROOT/'preview-output'/'screenshots'
