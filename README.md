@@ -34,3 +34,6 @@ Cloudflare Pages main builds use the approved origin https://smartfile-tools.pag
 
 ## PDF expansion phase 1
 Five new PDF utilities use the already locked local PDF-LIB dependency, with 50 MB / 200-page input limits, encrypted PDF rejection, page selection validation and independent pypdf tests. Watermark is limited to printable ASCII and is not security protection. These tools may not preserve forms, links, bookmarks, certified signatures or every interactive feature; keep originals. Advanced PDF rendering, image compression, OCR and DOCX conversion are not implemented in this phase.
+
+## Performance-first release gate
+See [performance gate](docs/PERFORMANCE_GATE.md). Synthetic CPU/network-throttled tests measure operation time, event-loop gaps, repeat/recovery and valid PDF/image output. Actual Android performance and worker cancellation remain separate gates.

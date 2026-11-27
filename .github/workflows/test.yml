@@ -5,7 +5,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -22,6 +22,7 @@ jobs:
       - run: pip install -r tests/requirements.txt
       - run: python -m playwright install --with-deps chromium
       - run: python tests/smoke.py
+      - run: python tests/performance.py
 
       - run: npm audit --omit=dev --audit-level=moderate
       - run: python scripts/package_preview.py
