@@ -17,6 +17,7 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: node scripts/build.cjs
       - run: node --check site/assets/tools.js
+      - run: node --check site/assets/photo-studio.js
       - run: node tests/static.cjs
       - run: node tests/launch.cjs
       - run: pip install -r tests/requirements.txt

@@ -1,0 +1,3 @@
+# Photo Studio phase 1
+
+One selected image, live preview up to 800 px, centered crop, rotation, horizontal flip, brightness/contrast/saturation, five filters, long-side resolution and JPEG quality. Undo/redo holds up to 40 settings snapshots, not image copies. Export capped at 12 MP, input 25 MB/24 MP. Original remains untouched, no network, local script only on Studio pages. Browser canvas filter support required; not an AI enhancer or exact KB compressor. Export and decoding remain on UI thread; test real low-memory Android. Drag crop, text/custom fonts, stickers, background, multi-image collage, AI and worker export remain future gates.
