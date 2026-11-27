@@ -7,6 +7,11 @@ from playwright.sync_api import sync_playwright
 ROOT=Path(__file__).resolve().parents[1]
 class Quiet(http.server.SimpleHTTPRequestHandler):
     def log_message(self,*args): pass
+    def end_headers(self):
+        for line in (ROOT/'site'/'_headers').read_text().splitlines():
+            if line.startswith('  '):
+                name,value=line.strip().split(':',1);self.send_header(name,value.strip())
+        super().end_headers()
 server=http.server.ThreadingHTTPServer(('127.0.0.1',0),functools.partial(Quiet,directory=str(ROOT/'site')))
 threading.Thread(target=server.serve_forever,daemon=True).start()
 base=f'http://127.0.0.1:{server.server_port}'
@@ -33,6 +38,10 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     page.goto(base)
     assert page.locator('.tile').count()==13
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    for width in (320,390,768,1280):
+        page.set_viewport_size({'width':width,'height':844})
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'),width
+    page.set_viewport_size({'width':390,'height':844})
     for kb in (20,50,100,200):
         go('compress');page.locator('#files').set_input_files(str(fixture));page.locator(f'[data-kb="{kb}"]').click();run()
         f=get(f'{kb}.jpg');assert f.stat().st_size<=kb*1024;Image.open(f).verify()
