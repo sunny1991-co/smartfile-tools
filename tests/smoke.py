@@ -37,11 +37,11 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
         with page.expect_download() as event: page.locator('#result a').click()
         path=d/name;event.value.save_as(path);return path
     page.goto(base)
-    assert page.locator('.tile').count()==18
-    assert page.locator('.tile .tool-icon svg').count()==18
+    assert page.locator('.tile').count()==19
+    assert page.locator('.tile .tool-icon svg').count()==19
     assert page.locator('.tool-group').count()==3
     shapes=page.locator('.tile svg').evaluate_all("(xs)=>xs.map(x=>x.innerHTML)")
-    assert len(set(shapes))==18
+    assert len(set(shapes))==19
     assert page.locator('.category-nav a').count()==3
     page.locator('.category-nav a').first.click()
     assert page.evaluate("location.hash")=='#group-pdf'
@@ -55,7 +55,7 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     search.fill('photo se pdf');assert page.locator('.tile:visible').count()==1
     search.fill('xyz-no-tool');assert page.locator('.tile:visible').count()==0
     expect(page.locator('#search-status')).to_contain_text('No tools found')
-    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==18
+    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==19
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     for width in (320,390,768,1280):
         page.set_viewport_size({'width':width,'height':844})
@@ -68,6 +68,18 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     for slug,wh in [('resize',(200,150)),('signature',(300,100)),('passport',(413,531)),('crop',(150,120))]:
         go(slug);page.locator('#files').set_input_files(str(fixture));page.locator('#width').fill(str(wh[0]));page.locator('#height').fill(str(wh[1]));run()
         assert Image.open(get(slug+'.jpg')).size==wh
+    go('resize');assert page.locator('.photo-tabs a').count()==6
+    assert page.locator('.photo-tabs a[aria-current=page]').inner_text()=='Resolution'
+    page.locator('#files').set_input_files(str(fixture));page.locator('[data-resolution="1280,720"]').click();run()
+    assert Image.open(get('hd.jpg')).size==(1280,720)
+    page.locator('.photo-tabs a').first.click();assert page.url.endswith('/tools/crop/')
+    page.locator('#files').set_input_files(str(fixture));page.locator('[data-ratio="1:1"]').click()
+    expect(page.locator('#width')).to_have_value('480');expect(page.locator('#x')).to_have_value('80');run()
+    assert Image.open(get('square-crop.jpg')).size==(480,480)
+    go('photo-sheet');page.locator('#files').set_input_files(str(fixture));page.locator('#paper').select_option('4x6');page.locator('#copies').select_option('6');run()
+    sheet=Image.open(get('sheet-6.jpg'));assert sheet.size==(1200,1800);assert '6 photos' in page.locator('#result').inner_text()
+    page.locator('#paper').select_option('a4');page.locator('#copies').select_option('12');run()
+    sheet=Image.open(get('sheet-12.jpg'));assert sheet.size==(2480,3508);assert '12 photos' in page.locator('#result').inner_text()
     go('crop');page.locator('#files').set_input_files(str(fixture));page.locator('#x').fill('630');page.locator('button[type=submit]').click();expect(page.locator('#status')).to_have_class('error',timeout=30000)
     go('image-to-pdf');page.locator('#files').set_input_files([str(fixture),str(d/'resize.jpg')]);run();reader=PdfReader(get('output.pdf'));assert len(reader.pages)==2;assert all(len(x.images)==1 for x in reader.pages)
     go('convert');page.locator('#files').set_input_files(str(fixture));page.locator('#format').select_option('image/webp');run();im=Image.open(get('converted.webp'));assert im.format=='WEBP' and im.size==(640,480)
@@ -117,11 +129,11 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     assert page.locator('.tile:visible').count()==1
     assert page.locator('.tile:visible').get_attribute('href')=='/hi/tools/signature/'
     page.locator('#clear-search').click()
-    assert page.locator('.tile:visible').count()==18
-    assert page.locator('.tile').count()==18
-    assert page.locator('.tile .tool-icon svg').count()==18
+    assert page.locator('.tile:visible').count()==19
+    assert page.locator('.tile').count()==19
+    assert page.locator('.tile .tool-icon svg').count()==19
     assert page.locator('.tool-group').count()==3
-    for slug in ('compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf'):
+    for slug in ('compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf','photo-sheet'):
         page.goto(base+'/hi/tools/'+slug+'/')
         assert page.locator('html').get_attribute('lang')=='hi'
         assert page.locator('#fields label').count()>0

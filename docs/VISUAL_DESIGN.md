@@ -4,3 +4,5 @@ Original inline SVG icons, one distinct shape per tool; three static categories 
 
 ## Bilingual instant tool finder
 Home only, tiny local script, English/Hindi names plus curated Roman Hindi search aliases and Devanagari numeral normalization. No network search, analytics, tracking or dependencies. All tools are still accessible if JavaScript is disabled. No-result state and clear button; filter hides empty groups and restores category navigation on clear. CI checks English/Hindi, Hindi digits, Roman Hindi and homepage budget. Not a fuzzy or semantic search engine.
+
+Photo editing tabs link existing tools (files must be selected again when switching pages). Crop ratio presets and HD/Full HD/4K resolution presets. Photo sheet repeats one image in a bounded grid of 4/6/8/12, A4 or 4×6 JPEG; no claim of certified passport dimensions or actual DPI metadata. Independent output dimensions and throttled performance test required.

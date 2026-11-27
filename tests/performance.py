@@ -58,7 +58,7 @@ def main():
                 assert all('/vendor/' not in x['name'] for x in sizes),sizes
                 total=sum(x['bytes'] for x in sizes)+page.evaluate("performance.getEntriesByType('navigation')[0].transferSize")
                 assert total<=100*1024,('homepage transfer',total)
-                assert page.locator('.tile svg').count()==18
+                assert page.locator('.tile svg').count()==19
                 assert page.locator('#tool-search').is_visible()
                 assert not any('/fonts/' in x['name'] for x in sizes),sizes
                 report['cases'].append({'case':'cold homepage simulated network','seconds':round(elapsed,3),'budget_seconds':5,'transfer_bytes':total})
@@ -98,6 +98,10 @@ def main():
             go('compress');page.locator('#files').set_input_files(str(photo));page.locator('[data-kb="50"]').click()
             run('photo-compress-50kb',15,valid_image)
             run('photo-compress-repeat',15,valid_image)
+            go('photo-sheet');page.locator('#files').set_input_files(str(photo));page.locator('#copies').select_option('12')
+            def valid_sheet(path):
+                with Image.open(path) as im:assert im.size==(2480,3508);im.verify()
+            run('photo-sheet-12-a4',15,valid_sheet)
             go('image-to-pdf');page.locator('#files').set_input_files(photos[:3]);run('three-camera-photos',15,valid_pdf(3))
             go('image-to-pdf');page.locator('#files').set_input_files(photos);run('ten-camera-photos',45,valid_pdf(10))
             go('merge-pdf');page.locator('#pdf-files').set_input_files(pdfs);run('merge-100-blank-pages',15,valid_pdf(100))
