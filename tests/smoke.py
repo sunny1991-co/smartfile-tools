@@ -46,6 +46,16 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     page.locator('.category-nav a').first.click()
     assert page.evaluate("location.hash")=='#group-pdf'
     assert page.locator('#group-pdf .tile').count()==8
+    search=page.locator('#tool-search')
+    expect(search).to_be_visible()
+    search.fill('merge pdf');assert page.locator('.tile:visible').count()==1
+    assert page.locator('.tile:visible').get_attribute('href')=='/tools/merge-pdf/'
+    search.fill('५० kb');assert page.locator('.tile:visible').count()==1
+    assert page.locator('.tile:visible').get_attribute('href')=='/tools/compress/'
+    search.fill('photo se pdf');assert page.locator('.tile:visible').count()==1
+    search.fill('xyz-no-tool');assert page.locator('.tile:visible').count()==0
+    expect(page.locator('#search-status')).to_contain_text('No tools found')
+    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==18
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     for width in (320,390,768,1280):
         page.set_viewport_size({'width':width,'height':844})
@@ -103,6 +113,11 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     go('words');page.locator('#text').fill('hello world\nthree');run();assert '3 words' in page.locator('#result').inner_text()
     page.goto(base+'/hi/')
     assert page.locator('html').get_attribute('lang')=='hi'
+    page.locator('#tool-search').fill('हस्ताक्षर')
+    assert page.locator('.tile:visible').count()==1
+    assert page.locator('.tile:visible').get_attribute('href')=='/hi/tools/signature/'
+    page.locator('#clear-search').click()
+    assert page.locator('.tile:visible').count()==18
     assert page.locator('.tile').count()==18
     assert page.locator('.tile .tool-icon svg').count()==18
     assert page.locator('.tool-group').count()==3
