@@ -58,7 +58,7 @@ def main():
                 assert all('/vendor/' not in x['name'] for x in sizes),sizes
                 total=sum(x['bytes'] for x in sizes)+page.evaluate("performance.getEntriesByType('navigation')[0].transferSize")
                 assert total<=100*1024,('homepage transfer',total)
-                assert page.locator('.tile svg').count()==19
+                assert page.locator('.tile svg').count()==20
                 assert page.locator('#tool-search').is_visible()
                 assert not any('/fonts/' in x['name'] for x in sizes),sizes
                 report['cases'].append({'case':'cold homepage simulated network','seconds':round(elapsed,3),'budget_seconds':5,'transfer_bytes':total})
@@ -98,6 +98,11 @@ def main():
             go('compress');page.locator('#files').set_input_files(str(photo));page.locator('[data-kb="50"]').click()
             run('photo-compress-50kb',15,valid_image)
             run('photo-compress-repeat',15,valid_image)
+            go('photo-studio');page.locator('#files').set_input_files(str(photo));expect(page.locator('#preview')).to_be_visible(timeout=10000)
+            page.locator('#rotate').click();page.locator('#filter').select_option('sepia');page.locator('#resolution').select_option('1920')
+            def valid_studio(path):
+                with Image.open(path) as im:assert im.size==(1440,1920);im.verify()
+            run('studio-rotate-filter-export',15,valid_studio)
             go('photo-sheet');page.locator('#files').set_input_files(str(photo));page.locator('#copies').select_option('12')
             def valid_sheet(path):
                 with Image.open(path) as im:assert im.size==(2480,3508);im.verify()

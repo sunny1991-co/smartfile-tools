@@ -7,7 +7,7 @@ site=ROOT/'site'
 output=ROOT/'preview-output'
 output.mkdir(exist_ok=True)
 pages=list(site.rglob('index.html'))
-assert len(pages)==46
+assert len(pages)==48
 assert all('noindex, nofollow' in p.read_text(encoding='utf-8') for p in pages)
 assert 'Disallow: /' in (site/'robots.txt').read_text()
 assert not (site/'sitemap.xml').exists()
@@ -31,4 +31,4 @@ with ZipFile(zip_path,'w',ZIP_DEFLATED) as z:
 with ZipFile(zip_path) as z:assert z.testzip() is None
 report={'commit':os.getenv('GITHUB_SHA','local'),'pages':len(pages),'files':len(files),'zip_sha256':hashlib.sha256(zip_path.read_bytes()).hexdigest(),'preview_only':True,'ads':False,'public_launch':False}
 (output/'preview-manifest.json').write_text(json.dumps(report,indent=2)+'\n')
-print('PASS packaged local preview with 46 pages, 6 screenshots and ZIP integrity',report)
+print('PASS packaged local preview with 48 pages, 6 screenshots and ZIP integrity',report)
