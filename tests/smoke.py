@@ -73,6 +73,21 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     print('PASS PDF merge/extract, invalid range, encrypted rejection and independently decoded QR')
     go('age');page.locator('#birth').fill('2000-02-29');page.locator('#asof').fill('2023-02-28');run();assert '23 years, 0 months, 0 days' in page.locator('#result').inner_text()
     go('words');page.locator('#text').fill('hello world\nthree');run();assert '3 words' in page.locator('#result').inner_text()
+    page.goto(base+'/hi/')
+    assert page.locator('html').get_attribute('lang')=='hi'
+    assert page.locator('.tile').count()==13
+    for slug in ('compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words'):
+        page.goto(base+'/hi/tools/'+slug+'/')
+        assert page.locator('html').get_attribute('lang')=='hi'
+        assert page.locator('#fields label').count()>0
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'),slug
+        assert page.locator('nav a.language').get_attribute('href')=='/tools/'+slug+'/'
+    page.goto(base+'/hi/tools/compress/');page.locator('#files').set_input_files(str(fixture));page.locator('[data-kb="20"]').click();page.locator('button[type=submit]').click()
+    expect(page.locator('#status')).to_have_text('तैयार। अपना परिणाम जांचें।',timeout=30000)
+    assert get('hi-20.jpg').stat().st_size<=20*1024
+    page.goto(base+'/hi/tools/age/');page.locator('#birth').fill('2000-02-29');page.locator('#asof').fill('2023-02-28');page.locator('button[type=submit]').click()
+    expect(page.locator('#result')).to_contain_text('23 साल, 0 महीने, 0 दिन')
+    print('PASS Hindi pages, language links, compression and age results')
     assert not errors,errors;assert not external,external
     print('PASS resize, crop, signature, ID photo, PDF, age, word count and no external requests')
     browser.close()
