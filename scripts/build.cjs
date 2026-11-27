@@ -29,5 +29,7 @@ function pages(catalog,origin="",contact="",verification=""){
 }
 require('./vendor.cjs');
 const cfPreview=process.env.CF_PAGES==="1"&&process.env.CF_PAGES_BRANCH!=="main";
-const verification=(cfPreview?"":process.env.GOOGLE_SITE_VERIFICATION||"").trim();if(verification&&!/^[A-Za-z0-9_-]{10,256}$/.test(verification))throw Error("GOOGLE_SITE_VERIFICATION must contain only the public HTML tag content");
+// Google HTML ownership tag is public by design, not an API credential.
+const ownerVerification=process.env.CF_PAGES==="1"&&process.env.CF_PAGES_BRANCH==="main"?"bmYnICLK9emGjMVNQUG8j0t86MgFR7ZJU_sR_DEc-Z4":"";
+const verification=(cfPreview?"":process.env.GOOGLE_SITE_VERIFICATION??ownerVerification).trim();if(verification&&!/^[A-Za-z0-9_-]{10,256}$/.test(verification))throw Error("GOOGLE_SITE_VERIFICATION must contain only the public HTML tag content");
 const origin=(cfPreview?"":process.env.SITE_URL||"").replace(/\/$/,""),contact=(cfPreview?"":process.env.SITE_CONTACT_EMAIL||"").trim();if(origin){const u=new URL(origin);if(u.protocol!=="https:"||u.origin!==origin)throw Error("SITE_URL must be a plain HTTPS origin");if(process.env.LAUNCH_APPROVED!=="yes"||! /^[A-Za-z0-9._+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(contact))throw Error("Public indexing requires owner approval and a valid SITE_CONTACT_EMAIL");} const root=path.resolve(__dirname,".."); for(const [name,data] of Object.entries(pages(catalog,origin,origin?contact:"",verification))){const p=path.join(root,name);fs.mkdirSync(path.dirname(p),{recursive:true});fs.writeFileSync(p,data);}if(!origin)fs.rmSync(path.join(root,"site/sitemap.xml"),{force:true});console.log("Built 34 pages");

@@ -12,3 +12,5 @@ Official references:
 - https://support.google.com/webmasters/answer/9008080
 - https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap
 - https://support.google.com/adsense/answer/12170421
+
+Owner-provided public HTML verification value is now the default only for Cloudflare Pages main builds. An explicit GOOGLE_SITE_VERIFICATION variable overrides it. No local or non-main build publishes the default. This does not grant indexing or enable ads. Confirm deployment and the live meta tag before Verify.
