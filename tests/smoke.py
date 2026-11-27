@@ -1,9 +1,9 @@
 from pathlib import Path
-import os, tempfile, threading, functools, http.server, random
+import os, tempfile, threading, functools, http.server, random, re
 from PIL import Image
 from pypdf import PdfReader, PdfWriter
 import zxingcpp
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, expect
 ROOT=Path(__file__).resolve().parents[1]
 class Quiet(http.server.SimpleHTTPRequestHandler):
     def log_message(self,*args): pass
@@ -30,7 +30,8 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
         page.locator('#fields input, #fields textarea').first.wait_for()
     def run():
         page.locator('button[type=submit]').click()
-        page.wait_for_function("document.querySelector('button[type=submit]').disabled === false && document.querySelector('#status').textContent !== ''")
+        expect(page.locator('#status')).to_have_text(re.compile(r'^Done'),timeout=30000)
+        expect(page.locator('button[type=submit]')).to_be_enabled()
         assert page.locator('#status').inner_text().startswith('Done'),page.locator('#status').inner_text()
     def get(name):
         with page.expect_download() as event: page.locator('#result a').click()
@@ -49,7 +50,7 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     for slug,wh in [('resize',(200,150)),('signature',(300,100)),('passport',(413,531)),('crop',(150,120))]:
         go(slug);page.locator('#files').set_input_files(str(fixture));page.locator('#width').fill(str(wh[0]));page.locator('#height').fill(str(wh[1]));run()
         assert Image.open(get(slug+'.jpg')).size==wh
-    go('crop');page.locator('#files').set_input_files(str(fixture));page.locator('#x').fill('630');page.locator('button[type=submit]').click();page.wait_for_function("document.querySelector('#status').className==='error'")
+    go('crop');page.locator('#files').set_input_files(str(fixture));page.locator('#x').fill('630');page.locator('button[type=submit]').click();expect(page.locator('#status')).to_have_class('error',timeout=30000)
     go('image-to-pdf');page.locator('#files').set_input_files([str(fixture),str(d/'resize.jpg')]);run();reader=PdfReader(get('output.pdf'));assert len(reader.pages)==2;assert all(len(x.images)==1 for x in reader.pages)
     go('convert');page.locator('#files').set_input_files(str(fixture));page.locator('#format').select_option('image/webp');run();im=Image.open(get('converted.webp'));assert im.format=='WEBP' and im.size==(640,480)
     alpha=d/'alpha.png';Image.new('RGBA',(32,32),(255,0,0,0)).save(alpha)
@@ -63,10 +64,10 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     go('merge-pdf');page.locator('#pdf-files').set_input_files([str(d/'one.pdf'),str(d/'two.pdf')]);run()
     merged=get('merged.pdf');assert [int(x.mediabox.width) for x in PdfReader(merged).pages]==[120,140,220]
     go('split-pdf');page.locator('#pdf-files').set_input_files(str(merged));page.locator('#pages').fill('3,1');run();assert [int(x.mediabox.width) for x in PdfReader(get('extracted.pdf')).pages]==[220,120]
-    go('split-pdf');page.locator('#pdf-files').set_input_files(str(merged));page.locator('#pages').fill('4');page.locator('button[type=submit]').click();page.wait_for_function("document.querySelector('#status').className==='error'");assert page.locator('#result a').count()==0
+    go('split-pdf');page.locator('#pdf-files').set_input_files(str(merged));page.locator('#pages').fill('4');page.locator('button[type=submit]').click();expect(page.locator('#status')).to_have_class('error',timeout=30000);assert page.locator('#result a').count()==0
     enc=PdfWriter();enc.add_blank_page(width=120,height=300);enc.encrypt('test-password')
     with (d/'encrypted.pdf').open('wb') as fp:enc.write(fp)
-    go('split-pdf');page.locator('#pdf-files').set_input_files(str(d/'encrypted.pdf'));page.locator('#pages').fill('1');page.locator('button[type=submit]').click();page.wait_for_function("document.querySelector('#status').className==='error'");assert page.locator('#result a').count()==0
+    go('split-pdf');page.locator('#pdf-files').set_input_files(str(d/'encrypted.pdf'));page.locator('#pages').fill('1');page.locator('button[type=submit]').click();expect(page.locator('#status')).to_have_class('error',timeout=30000);assert page.locator('#result a').count()==0
     for value in ('https://example.com/smartfile','नमस्ते SmartFile'):
         go('qr');page.locator('#qr-text').fill(value);run();decoded=zxingcpp.read_barcode(Image.open(get('code.png')));assert decoded is not None and decoded.text==value,decoded
     print('PASS PDF merge/extract, invalid range, encrypted rejection and independently decoded QR')
