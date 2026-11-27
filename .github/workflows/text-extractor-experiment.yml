@@ -1,0 +1,35 @@
+name: Text extractor isolated experiment
+on:
+  push:
+    branches: ['research/text-extractor']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  prototype:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: experiments/text-extractor
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm audit --omit=dev --audit-level=moderate
+      - run: node --check extract.mjs && node build.cjs
+      - run: pip install -r ../../tests/requirements.txt
+      - run: python -m playwright install --with-deps chromium
+      - run: sudo apt-get install -y fonts-noto-core
+      - run: python test.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: text-extractor-candidate-lock
+          path: experiments/text-extractor/package-lock.json
