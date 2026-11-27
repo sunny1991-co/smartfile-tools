@@ -28,3 +28,6 @@ After a successful new CI run, download the `smartfile-mobile-preview` artifact 
 
 ## Helpful content and hosting guard
 Six tools now have practical, original guides in both languages. They address likely user tasks; search volume is not measured. Cloudflare Pages non-main builds forcibly omit canonical/sitemap and contact details even if production variables are accidentally present. Use main as production branch, and configure production variables only in Production. Preview is not access control.
+
+## Owner-approved production defaults
+Cloudflare Pages main builds use the approved origin https://smartfile-tools.pages.dev and public support contact; preview/local builds remain noindex. Set LAUNCH_APPROVED=no and redeploy to disable indexing eligibility. The live check runs daily and on demand. Actual Google indexing and revenue are not guaranteed; ads and analytics remain disabled.

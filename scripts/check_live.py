@@ -20,11 +20,13 @@ class Page(HTMLParser):
         self.robots = ""
         self.canonical = ""
         self.scripts = []
+        self.verification = ""
         self.feed(text)
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
         if tag == "html": self.lang = a.get("lang", "")
         if tag == "meta" and a.get("name", "").lower() == "robots": self.robots = a.get("content", "").lower()
+        if tag == "meta" and a.get("name") == "google-site-verification": self.verification = a.get("content", "")
         if tag == "link" and a.get("rel") == "canonical": self.canonical = a.get("href", "")
         if tag == "script": self.scripts.append(a.get("src", ""))
 
@@ -48,6 +50,11 @@ def check_page(path, mode):
         assert not p.canonical, path
     else:
         assert "noindex" not in p.robots and p.canonical == ORIGIN+path, path
+        assert "noindex" not in headers.get("X-Robots-Tag", "").lower(), path
+        if path == "/":
+            assert p.verification == "bmYnICLK9emGjMVNQUG8j0t86MgFR7ZJU_sR_DEc-Z4", "ownership tag missing"
+        if path in ("/about/", "/hi/about/"):
+            assert "mailto:sunnykummar090909@gmail.com" in text, "public support contact missing"
     for src in p.scripts:
         assert src and urlsplit(urljoin(ORIGIN+path, src)).netloc == urlsplit(ORIGIN).netloc, (path, src)
     csp = headers.get("Content-Security-Policy","")
@@ -71,6 +78,7 @@ def main():
         assert re.search(rb"(?im)^Disallow:\s*/\s*$",robots), robots
         assert b"Sitemap:" not in robots
     else:
+        assert not re.search(rb"(?im)^Disallow:\s*/\s*$",robots), robots
         assert b"Sitemap: "+(ORIGIN+"/sitemap.xml").encode() in robots
         _,xml=fetch("/sitemap.xml")
         root=ElementTree.fromstring(xml)
