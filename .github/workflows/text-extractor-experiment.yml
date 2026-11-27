@@ -20,8 +20,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-      - run: cat package-lock.json
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm audit --omit=dev --audit-level=moderate
       - run: node --check extract.mjs && node build.cjs

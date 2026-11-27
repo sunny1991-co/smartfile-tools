@@ -84,6 +84,25 @@ try:
         expect(page.locator('#status')).to_have_attribute('data-state','error',timeout=10000)
         expect(page.locator('#start')).to_be_enabled();expect(page.locator('#download')).to_be_disabled()
         run(eng,['SMART FILE PDF TEST'],'eng')
+        # Fresh browser context, 4x CPU slowdown and 8 Mbps connection with 150 ms latency.
+        cold=b.new_context(viewport={'width':390,'height':844},is_mobile=True,has_touch=True)
+        cold.route('**/*',route);mobile=cold.new_page();cdp=cold.new_cdp_session(mobile)
+        cdp.send('Emulation.setCPUThrottlingRate',{'rate':4})
+        cdp.send('Network.enable')
+        cdp.send('Network.emulateNetworkConditions',{'offline':False,'latency':150,'downloadThroughput':1000000,'uploadThroughput':500000})
+        transfers=[]
+        mobile.on('requestfinished',lambda r:transfers.append((r.url,r.sizes()['responseBodySize'])))
+        mobile.goto(base+'/');assert mobile.evaluate('document.documentElement.scrollWidth<=innerWidth')
+        assert not any('/vendor/' in u for u,_ in transfers)
+        mobile.locator('#file').set_input_files(str(img))
+        start=time.monotonic();mobile.locator('#start').click()
+        expect(mobile.locator('#status')).to_have_attribute('data-state','done',timeout=45000)
+        elapsed=time.monotonic()-start
+        assert normalized(mobile.locator('#text').input_value())==normalized('भारत मेरा देश है SMART FILE TEST')
+        total=sum(n for u,n in transfers if '/vendor/' in u)
+        print('OCR COLD MOBILE',round(elapsed,2),'seconds',total,'vendor bytes',flush=True)
+        assert elapsed<=45 and total<=10*1024*1024,(elapsed,total)
+        cold.close()
         assert not external,external
         print('PASS font accuracy benchmark, malformed PDF, page limit, cancel and retry',flush=True)
         b.close()
