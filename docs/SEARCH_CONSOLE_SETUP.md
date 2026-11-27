@@ -14,3 +14,6 @@ Official references:
 - https://support.google.com/adsense/answer/12170421
 
 Owner-provided public HTML verification value is now the default only for Cloudflare Pages main builds. An explicit GOOGLE_SITE_VERIFICATION variable overrides it. No local or non-main build publishes the default. This does not grant indexing or enable ads. Confirm deployment and the live meta tag before Verify.
+
+## Owner approval — 2026-11-27
+Owner confirmed launch and public support address. The main Cloudflare Pages build now defaults to the approved origin and contact, preserving the verified Google tag. Local and non-main preview builds stay unindexed. Explicit LAUNCH_APPROVED=no restores noindex and removes the sitemap/contact from output (redeploy required). Check live indexed-mode workflow before sitemap submission. Scheduled daily HTTPS health checks are read-only and are not traffic or revenue monitoring. Ads and analytics remain off.
