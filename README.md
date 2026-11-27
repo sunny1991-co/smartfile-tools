@@ -37,3 +37,6 @@ Five new PDF utilities use the already locked local PDF-LIB dependency, with 50 
 
 ## Performance-first release gate
 See [performance gate](docs/PERFORMANCE_GATE.md). Synthetic CPU/network-throttled tests measure operation time, event-loop gaps, repeat/recovery and valid PDF/image output. Actual Android performance and worker cancellation remain separate gates.
+
+## Visual tool library
+Original SVG icons, grouped bilingual tool cards, compact mobile layout. See [visual design gate](docs/VISUAL_DESIGN.md). No extra icon/font dependencies.
