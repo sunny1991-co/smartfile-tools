@@ -6,6 +6,7 @@
     "@tesseract.js-data/eng": "1.0.0",
     "@tesseract.js-data/hin": "1.0.0",
     "pdf-lib": "1.17.1",
+    "pdfjs-dist": "6.5.438",
     "qrcode-generator": "1.4.4",
     "tesseract.js": "7.0.0"
   }

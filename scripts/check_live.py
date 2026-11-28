@@ -9,9 +9,9 @@ from urllib.parse import urljoin, urlsplit
 from xml.etree import ElementTree
 
 ORIGIN = "https://smartfile-tools.pages.dev"
-TOOLS = "exam-photo compress-pdf id-card sheet-pdf unlock-pdf scan-pdf compress resize signature crop passport image-to-pdf age convert inspect merge-pdf split-pdf qr words remove-pdf-pages rotate-pdf reorder-pdf watermark-pdf number-pdf photo-sheet photo-studio background-changer".split()
+TOOLS = "exam-photo compress-pdf id-card sheet-pdf unlock-pdf scan-pdf pdf-jpg compress resize signature crop passport image-to-pdf age convert inspect merge-pdf split-pdf qr words remove-pdf-pages rotate-pdf reorder-pdf watermark-pdf number-pdf photo-sheet photo-studio background-changer".split()
 PAGES = [prefix + suffix for prefix in ("", "/hi") for suffix in ("/", "/privacy/", "/terms/", "/about/", *("/tools/" + t + "/" for t in TOOLS))]
-ASSETS = ["/assets/style.css", "/assets/tools.js", "/assets/library.js", "/assets/photo-studio.js", "/assets/background.js", "/assets/background-worker.js", "/assets/pdf-worker.js", "/assets/icon.svg", "/assets/vendor/pdf-lib.min.js", "/assets/vendor/qrcode.js", "/assets/vendor/THIRD-PARTY-LICENSES.txt", "/assets/pwa.js", "/assets/icon-192.png", "/assets/icon-512.png", "/assets/icon-512-maskable.png", "/manifest.webmanifest", "/sw.js", "/assets/vendor/tesseract/tesseract.min.js", "/assets/vendor/tesseract/worker.min.js", "/assets/vendor/tesseract/lang/hin.traineddata.gz"]
+ASSETS = ["/assets/style.css", "/assets/tools.js", "/assets/library.js", "/assets/photo-studio.js", "/assets/background.js", "/assets/background-worker.js", "/assets/pdf-worker.js", "/assets/icon.svg", "/assets/vendor/pdf-lib.min.js", "/assets/vendor/qrcode.js", "/assets/vendor/THIRD-PARTY-LICENSES.txt", "/assets/pwa.js", "/assets/icon-192.png", "/assets/icon-512.png", "/assets/icon-512-maskable.png", "/manifest.webmanifest", "/sw.js", "/assets/vendor/tesseract/tesseract.min.js", "/assets/vendor/tesseract/worker.min.js", "/assets/vendor/tesseract/lang/hin.traineddata.gz", "/assets/vendor/pdfjs/pdf.min.mjs", "/assets/vendor/pdfjs/pdf.worker.min.mjs"]
 
 class Page(HTMLParser):
     def __init__(self, text):
@@ -80,6 +80,10 @@ def main():
     csp=h.get("Content-Security-Policy","")
     assert "'wasm-unsafe-eval'" in csp and "'unsafe-eval'" not in csp and "connect-src 'self'" in csp, csp
     print("PASS OCR worker CSP allows only WebAssembly and own-origin files")
+    h,_=fetch("/assets/vendor/pdfjs/pdf.worker.min.mjs")
+    csp=h.get("Content-Security-Policy","")
+    assert "'wasm-unsafe-eval'" in csp and "'unsafe-eval'" not in csp and "connect-src 'self'" in csp, csp
+    print("PASS PDF renderer worker CSP allows only WebAssembly and own-origin files")
     _,robots=fetch("/robots.txt")
     if args.mode=="preview":
         assert re.search(rb"(?im)^Disallow:\s*/\s*$",robots), robots

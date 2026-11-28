@@ -52,15 +52,15 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
         with page.expect_download() as event: page.locator('#result a').click()
         path=d/name;event.value.save_as(path);return path
     page.goto(base)
-    assert page.locator('.tile').count()==27
-    assert page.locator('.tile .tool-icon svg').count()==27
+    assert page.locator('.tile').count()==28
+    assert page.locator('.tile .tool-icon svg').count()==28
     assert page.locator('.tool-group').count()==3
     shapes=page.locator('.tile svg').evaluate_all("(xs)=>xs.map(x=>x.innerHTML)")
-    assert len(set(shapes))==27
+    assert len(set(shapes))==28
     assert page.locator('.category-nav a').count()==3
     page.locator('.category-nav a').first.click()
     assert page.evaluate("location.hash")=='#group-pdf'
-    assert page.locator('#group-pdf .tile').count()==12
+    assert page.locator('#group-pdf .tile').count()==13
     search=page.locator('#tool-search')
     expect(search).to_be_visible()
     search.fill('merge pdf');assert page.locator('.tile:visible').count()==1
@@ -70,7 +70,7 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     search.fill('photo se pdf');assert page.locator('.tile:visible').count()==1
     search.fill('xyz-no-tool');assert page.locator('.tile:visible').count()==0
     expect(page.locator('#search-status')).to_contain_text('No tools found')
-    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==27
+    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==28
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     for width in (320,390,768,1280):
         page.set_viewport_size({'width':width,'height':844})
@@ -219,6 +219,18 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
         im.save(p1,quality=92);p2=p1;scan('hin');hindi_text=page.locator('#ocr-text').input_value()
         assert 'भारत' in hindi_text and 'आधार' in hindi_text and '2026' in hindi_text,hindi_text
         print('PASS Hindi OCR')
+    # PDF to JPG: pdf.js renders selected pages (with a password) at the chosen dpi; several pages come as a ZIP.
+    go('pdf-jpg');page.locator('#pdf-in').set_input_files(str(fx/'locked-aes256.pdf'));page.locator('#pdf-pass').fill('ABCD1990');page.locator('#pdf-pages').fill('1,3');run()
+    with page.expect_download() as event: page.locator('#result a').click()
+    zp=d/'pages.zip';event.value.save_as(zp);z=zipfile.ZipFile(zp);assert z.testzip() is None and z.namelist()==['page-001.jpg','page-003.jpg'],z.namelist()
+    shot=Image.open(__import__('io').BytesIO(z.read('page-003.jpg'))).convert('L');assert shot.size==(1239,1754),shot.size  # 595 x 842 pt at 150 dpi
+    assert shot.crop((140,200,800,265)).getextrema()[0]<100,'page text was not drawn'  # text baseline 720 pt from the bottom
+    go('pdf-jpg');page.locator('#pdf-in').set_input_files(str(heavy));page.locator('#pdf-pages').fill('2');page.locator('#pdf-dpi').select_option('96');run()
+    one=Image.open(get('one.jpg'));assert one.format=='JPEG' and one.size==(816,1104),one.size  # 612 x 828 pt at 96 dpi
+    go('pdf-jpg');page.locator('#pdf-in').set_input_files(str(fx/'locked-rc4.pdf'));page.locator('button[type=submit]').click()
+    expect(page.locator('#status')).to_have_text('This PDF needs a password. Enter it and try again.',timeout=30000)
+    go('pdf-jpg');page.locator('#pdf-in').set_input_files(str(heavy));page.locator('#pdf-pages').fill('9');page.locator('button[type=submit]').click()
+    expect(page.locator('#status')).to_have_text('Pages must be between 1 and 3.',timeout=30000)
     go('photo-sheet');page.locator('#files').set_input_files(str(fixture));page.locator('#paper').select_option('4x6');page.locator('#copies').select_option('6');run()
     sheet=Image.open(get('sheet-6.jpg'));assert sheet.size==(1200,1800);assert '6 photos' in page.locator('#result').inner_text()
     page.locator('#paper').select_option('a4');page.locator('#copies').select_option('12');run()
@@ -272,11 +284,11 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     hrefs=page.locator('.tile:visible').evaluate_all("(xs)=>xs.map(x=>x.getAttribute('href'))")
     assert sorted(hrefs)==['/hi/tools/exam-photo/','/hi/tools/signature/'],hrefs
     page.locator('#clear-search').click()
-    assert page.locator('.tile:visible').count()==27
-    assert page.locator('.tile').count()==27
-    assert page.locator('.tile .tool-icon svg').count()==27
+    assert page.locator('.tile:visible').count()==28
+    assert page.locator('.tile').count()==28
+    assert page.locator('.tile .tool-icon svg').count()==28
     assert page.locator('.tool-group').count()==3
-    for slug in ('exam-photo','compress-pdf','id-card','sheet-pdf','unlock-pdf','scan-pdf','compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf','photo-sheet','photo-studio','background-changer'):
+    for slug in ('exam-photo','compress-pdf','id-card','sheet-pdf','unlock-pdf','scan-pdf','pdf-jpg','compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf','photo-sheet','photo-studio','background-changer'):
         page.goto(base+'/hi/tools/'+slug+'/')
         assert page.locator('html').get_attribute('lang')=='hi'
         assert page.locator('#fields label').count()>0
