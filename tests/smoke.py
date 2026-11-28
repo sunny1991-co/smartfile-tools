@@ -52,15 +52,15 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
         with page.expect_download() as event: page.locator('#result a').click()
         path=d/name;event.value.save_as(path);return path
     page.goto(base)
-    assert page.locator('.tile').count()==33
-    assert page.locator('.tile .tool-icon svg').count()==33
+    assert page.locator('.tile').count()==36
+    assert page.locator('.tile .tool-icon svg').count()==36
     assert page.locator('.tool-group').count()==3
     shapes=page.locator('.tile svg').evaluate_all("(xs)=>xs.map(x=>x.innerHTML)")
-    assert len(set(shapes))==33
+    assert len(set(shapes))==36
     assert page.locator('.category-nav a').count()==3
     page.locator('.category-nav a').first.click()
     assert page.evaluate("location.hash")=='#group-pdf'
-    assert page.locator('#group-pdf .tile').count()==14
+    assert page.locator('#group-pdf .tile').count()==15
     search=page.locator('#tool-search')
     expect(search).to_be_visible()
     search.fill('merge pdf');assert page.locator('.tile:visible').count()==1
@@ -70,7 +70,7 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     search.fill('photo se pdf');assert page.locator('.tile:visible').first.get_attribute('href')=='/tools/image-to-pdf/'
     search.fill('xyz-no-tool');assert page.locator('.tile:visible').count()==0
     expect(page.locator('#search-status')).to_contain_text('No tools found')
-    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==33
+    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==36
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     for width in (320,390,768,1280):
         page.set_viewport_size({'width':width,'height':844})
@@ -191,6 +191,54 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
         expect(page.locator('#status')).to_have_class('error',timeout=30000);assert msg in page.locator('#status').inner_text() and page.locator('#result a').count()==0
     go('unlock-pdf');page.locator('#pdf-files').set_input_files(str(heavy));page.locator('button[type=submit]').click()
     expect(page.locator('#status')).to_have_text('This PDF is not password protected.',timeout=30000)
+    # Lock PDF: AES-256 (R6) round trip through our unlock tool, and through poppler when installed.
+    plain=out
+    go('lock-pdf');page.locator('#pdf-files').set_input_files(str(plain));page.locator('#pdf-password').fill('Ram@2026');page.locator('#pdf-password2').fill('Ram@2027');page.locator('button[type=submit]').click()
+    expect(page.locator('#status')).to_have_class('error',timeout=30000);assert 'do not match' in page.locator('#status').inner_text()
+    page.locator('#pdf-password2').fill('Ram@2026');page.locator('#lock-allow').select_option('no');run()
+    locked=get('statement-locked.pdf');raw=locked.read_bytes()  # pypdf needs the cryptography package for AES, so read the dictionary directly
+    encd=raw[raw.rfind(b'<<',0,raw.find(b'/Filter /Standard')):raw.find(b'/Filter /Standard')+400]
+    assert re.search(rb'/V 5\b',encd) and re.search(rb'/R 6\b',encd) and b'/AESV3' in encd and b'/Encrypt' in raw[raw.rfind(b'trailer'):],encd
+    assert int(re.search(rb'/P (-?\d+)',encd).group(1))&16==0
+    assert b'unlock test page' not in raw and b'Encrypted statement' not in raw
+    import shutil,subprocess
+    if shutil.which('pdftotext'):
+        assert 'unlock test page 2' in subprocess.run(['pdftotext','-upw','Ram@2026',str(locked),'-'],capture_output=True,text=True,check=True).stdout
+        assert subprocess.run(['pdftotext','-upw','wrong',str(locked),'-'],capture_output=True).returncode!=0
+        print('PASS poppler opens the locked PDF only with the password')
+    go('unlock-pdf');page.locator('#pdf-files').set_input_files(str(locked));page.locator('#pdf-password').fill('Ram@2026');run()
+    back=PdfReader(get('statement-back.pdf'));assert len(back.pages)==3 and 'unlock test page 2' in back.pages[1].extract_text() and back.metadata.title=='Encrypted statement (test)'
+    go('lock-pdf');page.locator('#pdf-files').set_input_files(str(fx/'locked-aes128.pdf'));page.locator('#pdf-password').fill('abcd');page.locator('#pdf-password2').fill('abcd');page.locator('button[type=submit]').click()
+    expect(page.locator('#status')).to_have_class('error',timeout=30000);assert 'already has a password' in page.locator('#status').inner_text()
+    print('PASS lock PDF AES-256 round trip, permissions, mismatch and already-locked errors')
+    # Typing test: English exact passage, Remington (Kruti Dev keys) shown in Hindi, mistakes counted once, paste blocked.
+    go('typing-test');page.locator('#ty-mode').select_option('en');page.locator('#ty-passage').select_option('1')
+    words=page.locator('#ty-text').inner_text().split();typed=words[:12];typed[3]='wrongword';del typed[7]
+    page.locator('#ty-input').fill(' '.join(typed));expect(page.locator('#ty-timer')).to_contain_text('Time left');page.locator('button[type=submit]').click()
+    expect(page.locator('#status')).to_have_text(re.compile(r'^Done'));res=page.locator('#ty-result').inner_text()
+    assert re.search(r'Words typed\s+11',res) and re.search(r'Correct words\s+10',res) and re.search(r'Mistakes[^\n]*\s+2',res),res
+    assert page.locator('#ty-input').evaluate('e=>e.readOnly')
+    page.locator('#ty-restart').click();assert page.locator('#ty-input').input_value()=='' and page.locator('#result').inner_text()==''
+    page.locator('#ty-mode').select_option('hi-remington');page.locator('#ty-passage').select_option('0');page.locator('#ty-input').fill('fMftVy Hkkjr us')
+    expect(page.locator('#ty-preview')).to_have_text('डिजिटल भारत ने');page.locator('button[type=submit]').click()
+    expect(page.locator('#status')).to_have_text(re.compile(r'^Done'));res=page.locator('#ty-result').inner_text();assert re.search(r'Correct words\s+3',res) and re.search(r'Mistakes[^\n]*\s+0',res),res
+    page.locator('#ty-restart').click();assert page.locator('#ty-input').evaluate("e=>{const ev=new Event('paste',{cancelable:true});e.dispatchEvent(ev);return ev.defaultPrevented}")
+    page.clock.install();page.reload();page.locator('#ty-input').wait_for();page.locator('#ty-minutes').select_option('1');page.locator('#ty-mode').select_option('en');page.locator('#ty-input').fill('Good typing')
+    page.clock.run_for(61000);expect(page.locator('#ty-result')).to_be_visible();assert 'Time is up' in page.locator('#ty-timer').inner_text()
+    print('PASS typing test scoring, Remington preview, restart, paste block and auto stop')
+    # Resume and biodata maker: one A4 page PDF with photo, Hindi headings.
+    for kind,lang in (('resume','en'),('biodata','hi')):
+        go('resume-maker');page.locator('#rs-kind').select_option(kind);page.locator('#rs-lang').select_option(lang)
+        page.locator('#rs-name').fill('राम कुमार Sharma');page.locator('#rs-post').fill('Data Entry Operator');page.locator('#rs-phone').fill('9876543210');page.locator('#rs-email').fill('ram@example.com')
+        page.locator('#rs-dob').fill('15-08-2000');page.locator('#rs-father').fill('Shyam Kumar');page.locator('#rs-languages').fill('Hindi, English');page.locator('#rs-address').fill('Gali 4, Civil Lines, Lucknow, Uttar Pradesh 226001')
+        page.locator('#rs-objective').fill('To work with honesty and grow with the organisation.');page.locator('#rs-education').fill('10th | UP Board | 2016 | 78%\n12th | UP Board | 2018 | 81%\nB.A. | Lucknow University | 2021 | 65%')
+        page.locator('#rs-experience').fill('Computer operator, Sharma Traders, 2021 to 2024');page.locator('#rs-skills').fill('MS Office, Hindi typing 30 WPM, Tally');page.locator('#rs-place').fill('Lucknow')
+        page.locator('#files').set_input_files(str(fixture));run()
+        rp=PdfReader(get(f'{kind}.pdf'));assert len(rp.pages)==1 and [round(float(x)) for x in rp.pages[0].mediabox[2:]]==[595,842],kind
+        im=rp.pages[0]['/Resources']['/XObject']['/Im0'].get_object();assert (im['/Width'],im['/Height'])==(1240,1754),kind
+        assert page.locator('#result img.resume-preview').count()==1
+    go('resume-maker');page.locator('button[type=submit]').click();assert page.locator('#result a').count()==0
+    print('PASS resume and biodata PDF, A4 one page, photo and validation')
     # Scan to PDF + OCR: dark background is trimmed to the paper, pages become a PDF, OCR reads the text (all local files).
     from PIL import ImageDraw,ImageFont
     def paper_photo(path,line):
@@ -345,11 +393,11 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     hrefs=page.locator('.tile:visible').evaluate_all("(xs)=>xs.map(x=>x.getAttribute('href'))")
     assert sorted(hrefs)==['/hi/tools/exam-photo/','/hi/tools/sign-pdf/','/hi/tools/signature/'],hrefs
     page.locator('#clear-search').click()
-    assert page.locator('.tile:visible').count()==33
-    assert page.locator('.tile').count()==33
-    assert page.locator('.tile .tool-icon svg').count()==33
+    assert page.locator('.tile:visible').count()==36
+    assert page.locator('.tile').count()==36
+    assert page.locator('.tile .tool-icon svg').count()==36
     assert page.locator('.tool-group').count()==3
-    for slug in ('exam-photo','compress-pdf','id-card','sheet-pdf','unlock-pdf','scan-pdf','pdf-jpg','name-date','sign-pdf','image-text','mask-aadhaar','krutidev-unicode','compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf','photo-sheet','photo-studio','background-changer'):
+    for slug in ('exam-photo','compress-pdf','id-card','sheet-pdf','unlock-pdf','scan-pdf','pdf-jpg','name-date','sign-pdf','image-text','mask-aadhaar','krutidev-unicode','lock-pdf','typing-test','resume-maker','compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf','photo-sheet','photo-studio','background-changer'):
         page.goto(base+'/hi/tools/'+slug+'/')
         assert page.locator('html').get_attribute('lang')=='hi'
         assert page.locator('#fields label').count()>0

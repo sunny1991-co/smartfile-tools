@@ -97,6 +97,39 @@ const keyFor=pwBytes=>{const padded=cat(pwBytes.subarray(0,32),PAD).subarray(0,3
 const userOk=k=>{if(R===2)return same(rc4(k,PAD),U,32);let x=rc4(k,md5(cat(PAD,id)));for(let i=1;i<=19;i++)x=rc4(k.map(b=>b^i),x);return same(x,U,16);};
 const pwb=toBytes(Array.from(password,ch=>ch.charCodeAt(0)<256?ch:"?").join(""));let k=keyFor(pwb);if(userOk(k))return {aes:0,key:k,R};
 /* Owner password: recover the user password from /O (Algorithm 7). */let ok=md5(cat(pwb.subarray(0,32),PAD).subarray(0,32));if(R>=3)for(let i=0;i<50;i++)ok=md5(ok);ok=ok.subarray(0,n);let upw=O.subarray(0,32);if(R===2)upw=rc4(ok,upw);else for(let i=19;i>=0;i--)upw=rc4(ok.map(b=>b^i),upw);k=keyFor(upw);return userOk(k)?{aes:0,key:k,R}:null;}
+/* Lock PDF: standard security handler, AES-256 (V5/R6, PDF 2.0 and Acrobat X+). */
+async function lockPdf(){const f=job.files[0];if(!f||!f.size||f.size>50*1024*1024)fail("Choose one PDF up to 50 MB.");const pw=String(job.password||"");if([...pw].length<4||[...pw].length>32)fail("Use a password of 4 to 32 characters.");if(pw!==String(job.confirm||""))fail("The two passwords do not match.");
+if(!crypto?.subtle||!crypto.getRandomValues)fail("This browser cannot lock PDFs. Try a recent Chrome or Edge.");progress("Reading PDF…","PDF पढ़ रहे हैं…");await breathe();const bytes=new Uint8Array(await f.arrayBuffer());if(new TextDecoder().decode(bytes.slice(0,5))!=="%PDF-")fail("Input is not a PDF.");
+const L=PDFLib;let doc;try{doc=await L.PDFDocument.load(bytes,{updateMetadata:false});}catch(e){fail(/encrypt/i.test(String(e&&e.message))?"This PDF already has a password. Unlock it first, then lock it with the new password.":"PDF could not be opened.");}
+const ctx=doc.context,rand=n=>crypto.getRandomValues(new Uint8Array(n)),zero=new Uint8Array(16),enc8=t=>new TextEncoder().encode(t.normalize("NFKC")).subarray(0,127);
+progress("Creating password keys…","पासवर्ड कुंजी बना रहे हैं…");await breathe();
+const fileKey=rand(32),upw=enc8(pw),opw=enc8([...rand(24)].map(b=>b.toString(16).padStart(2,"0")).join(""));
+const uvs=rand(8),uks=rand(8),U=cat(await hash2B(upw,uvs,new Uint8Array(0),6),uvs,uks),UE=await aesNoPad(await hash2B(upw,uks,new Uint8Array(0),6),zero,fileKey,false);
+const ovs=rand(8),oks=rand(8),O=cat(await hash2B(opw,ovs,U,6),ovs,oks),OE=await aesNoPad(await hash2B(opw,oks,U,6),zero,fileKey,false);
+/* Permissions: printing always; copying, editing, comments and page assembly only when allowed. */let P=-4;if(!job.allowEdit)P&=~(8|16|32|1024);
+const perms=new Uint8Array(16);new DataView(perms.buffer).setInt32(0,P,true);perms.fill(255,4,8);perms.set([84,97,100,98],8);perms.set(rand(4),12);const Perms=await aesNoPad(fileKey,zero,perms,false);
+const key=await aesKey(fileKey);const seal=async data=>{const iv=rand(16);return cat(iv,new Uint8Array(await crypto.subtle.encrypt({name:"AES-CBC",iv},key,data)));};
+const hex=b=>L.PDFHexString.of([...b].map(x=>x.toString(16).padStart(2,"0")).join(""));
+const T=L.PDFName.of("Type");
+async function walk(o){if(o instanceof L.PDFString||o instanceof L.PDFHexString)return hex(await seal(o.asBytes()));
+if(o instanceof L.PDFArray){for(let i=0;i<o.size();i++){const v=o.get(i),w=await walk(v);if(w!==v)o.set(i,w);}return o;}
+if(o instanceof L.PDFDict){for(const [k,v] of o.entries()){const w=await walk(v);if(w!==v)o.set(k,w);}return o;}return o;}
+const objects=ctx.enumerateIndirectObjects();let done=0;
+for(const [ref,obj] of objects){const type=obj instanceof L.PDFDict?obj.get(T):obj instanceof L.PDFStream?obj.dict.get(T):null;
+if(type===L.PDFName.of("XRef")||type===L.PDFName.of("ObjStm")){ctx.delete(ref);continue;}
+if(obj instanceof L.PDFStream){await walk(obj.dict);const data=await seal(obj.getContents());obj.dict.set(L.PDFName.of("Length"),L.PDFNumber.of(data.length));ctx.assign(ref,L.PDFRawStream.of(obj.dict,data));}
+else{const w=await walk(obj);if(w!==obj)ctx.assign(ref,w);}
+if(++done%200===0){progress(`Encrypting… ${Math.round(100*done/objects.length)}%`,`लॉक कर रहे हैं… ${Math.round(100*done/objects.length)}%`);await breathe();}}
+const ids=ctx.trailerInfo.ID;let first=null;if(ids instanceof L.PDFArray&&ids.size()===2){const a=ids.get(0);if(a instanceof L.PDFHexString||a instanceof L.PDFString)first=a;}
+const id1=first||hex(rand(16));ctx.trailerInfo.ID=ctx.obj([id1,hex(rand(16))]);
+const cf=ctx.obj({StdCF:ctx.obj({AuthEvent:"DocOpen",CFM:"AESV3",Length:32})});
+const encDict=ctx.obj({Filter:"Standard",V:5,R:6,Length:256,CF:cf,StmF:"StdCF",StrF:"StdCF",P,EncryptMetadata:true});
+encDict.set(L.PDFName.of("O"),hex(O));encDict.set(L.PDFName.of("U"),hex(U));encDict.set(L.PDFName.of("OE"),hex(OE));encDict.set(L.PDFName.of("UE"),hex(UE));encDict.set(L.PDFName.of("Perms"),hex(Perms));
+ctx.trailerInfo.Encrypt=ctx.register(encDict);
+doc.catalog.set(L.PDFName.of("Extensions"),ctx.obj({ADBE:ctx.obj({BaseVersion:L.PDFName.of("1.7"),ExtensionLevel:8})}));
+progress("Saving locked PDF…","लॉक की हुई PDF सेव कर रहे हैं…");await breathe();
+const out=await doc.save({useObjectStreams:false,updateFieldAppearances:false,addDefaultPage:false});const name=(f.name||"document.pdf").replace(/\.pdf$/i,"")+"-locked.pdf";
+postMessage({type:"done",bytes:out,name,pages:doc.getPageCount(),note:job.allowEdit?["Anyone with the password can open, print, copy and edit it.","पासवर्ड वाला कोई भी इसे खोल, प्रिंट, कॉपी और बदल सकता है।"]:["Opening needs the password. Copying and editing are marked as not allowed; some apps ignore this.","खोलने के लिए पासवर्ड चाहिए। कॉपी और बदलाव की अनुमति नहीं दी गई है; कुछ ऐप यह नियम नहीं मानते।"]},[out.buffer]);}
 async function unlockPdf(){const f=job.files[0];if(!f||!f.size||f.size>50*1024*1024)fail("Choose one PDF up to 50 MB.");const bytes=new Uint8Array(await f.arrayBuffer());if(new TextDecoder().decode(bytes.slice(0,5))!=="%PDF-")fail("Input is not a PDF.");
 if(!crypto?.subtle)fail("This browser cannot unlock PDFs. Try a recent Chrome or Edge.");progress("Reading PDF…","PDF पढ़ रहे हैं…");await breathe();const s=latin1(bytes);
 const encRefs=[...s.matchAll(/\/Encrypt\s+(\d+)\s+(\d+)\s+R/g)];if(!encRefs.length)fail("This PDF is not password protected.");const encNum=Number(encRefs.at(-1)[1]),encGen=Number(encRefs.at(-1)[2]);const at=findObject(s,encNum,encGen);if(at<0)fail("PDF could not be opened.");
@@ -130,4 +163,4 @@ const pages=doc.getPages();if(pages.length<1||pages.length>200)fail("Each PDF mu
 for(const p of chosen){const v=visiblePage(p),w=v.w*job.sigSize/100,h=w*job.sigH/job.sigW,m=Math.min(v.w,v.h)*.06;if(h>v.h*.4)fail("Page too small for this signature size.");const x=job.sigPlace==="bl"?m:job.sigPlace==="bc"?(v.w-w)/2:v.w-m-w,y=job.sigPlace==="tr"?v.h-m-h:m;p.drawImage(img,{...v.point(x,y),width:w,height:h,rotate:PDFLib.degrees(v.r)});}
 progress("Saving PDF…","PDF सेव हो रही है…");await breathe();const out=await doc.save({objectsPerTick:25});postMessage({type:"done",bytes:out,name:"smartfile-signed.pdf",pages:pages.length,note:[`Signature added to ${chosen.length} ${chosen.length===1?"page":"pages"}. This is a picture of a signature, not a certified digital signature.`,`${chosen.length} पेज पर हस्ताक्षर लगाया गया। यह हस्ताक्षर की तस्वीर है, प्रमाणित डिजिटल हस्ताक्षर नहीं।`]},[out.buffer]);}
 
-self.onmessage=async e=>{try{job=e.data;tool=job.tool;if(!Array.isArray(job.files)||!["sign-pdf","unlock-pdf","compress-pdf","merge-pdf","split-pdf","remove-pdf-pages","rotate-pdf","reorder-pdf","watermark-pdf","number-pdf"].includes(tool))fail("Invalid PDF operation.");if(tool==="sign-pdf")await signPdf();else if(tool==="unlock-pdf")await unlockPdf();else if(tool==="compress-pdf")await compressPdf();else if(tool==="merge-pdf"||tool==="split-pdf")await editPdf();else await transformPdf();}catch(err){postMessage({type:"error",message:err.message||"Unable to process input."});}};
+self.onmessage=async e=>{try{job=e.data;tool=job.tool;if(!Array.isArray(job.files)||!["sign-pdf","unlock-pdf","lock-pdf","compress-pdf","merge-pdf","split-pdf","remove-pdf-pages","rotate-pdf","reorder-pdf","watermark-pdf","number-pdf"].includes(tool))fail("Invalid PDF operation.");if(tool==="sign-pdf")await signPdf();else if(tool==="unlock-pdf")await unlockPdf();else if(tool==="lock-pdf")await lockPdf();else if(tool==="compress-pdf")await compressPdf();else if(tool==="merge-pdf"||tool==="split-pdf")await editPdf();else await transformPdf();}catch(err){postMessage({type:"error",message:err.message||"Unable to process input."});}};

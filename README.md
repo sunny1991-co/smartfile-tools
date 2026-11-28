@@ -49,3 +49,8 @@ PDF to JPG uses pdfjs-dist 6.5.438 (Mozilla pdf.js, Apache-2.0), loaded with a d
 
 ## Kruti Dev ↔ Unicode
 site/assets/krutidev.js converts Hindi between the legacy Kruti Dev 010 keyboard encoding and Unicode, both ways, on the device. It is loaded only on the converter page. The mapping is our own table of Kruti Dev 010 key codes (letters, half forms, common conjuncts, short-i and reph reordering). Rare ligatures may need a manual check; English letters cannot be represented in Kruti Dev and the page warns about them.
+
+## Lock PDF, typing test, resume maker
+Lock PDF (pdf-worker.js) adds an opening password with the standard security handler, AES-256 (V5/R6, AESV3): random file key, SHA-256/384/512 hash 2.B for U/O/UE/OE, Perms, every string and stream encrypted with a fresh IV. The owner password is random; "print only" clears the copy, edit, annotate and assemble bits, which some apps ignore. Smoke tests unlock the result with our own unlock tool and, when installed, with poppler's pdftotext.
+The typing test (typing.js) uses original practice passages and a word-level comparison (longest common subsequence): a wrong word is one mistake, plus missed and extra words. Remington mode converts Kruti Dev keys with krutidev.js. Exam rules differ; it is practice only.
+The resume maker (resume.js) draws one A4 page at 150 dpi on a canvas (system Devanagari fonts for Hindi) and saves it as a one-page image PDF with the existing PDF writer.
