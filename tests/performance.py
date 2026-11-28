@@ -10,12 +10,27 @@ from pypdf import PdfWriter, PdfReader
 from playwright.sync_api import sync_playwright, expect
 
 ROOT=Path(__file__).resolve().parents[1]
+def site_headers(url_path, text):
+    """Apply _headers like Cloudflare Pages: matching rules in order, '! Name' removes a header."""
+    rules, current = [], None
+    for line in text.splitlines():
+        if not line.strip(): continue
+        if not line.startswith(" "):
+            current = (line.strip(), []); rules.append(current)
+        elif current: current[1].append(line.strip())
+    out = {}
+    for pattern, lines in rules:
+        if pattern == url_path or (pattern.endswith("*") and url_path.startswith(pattern[:-1])):
+            for item in lines:
+                if item.startswith("!"): out.pop(item[1:].strip().lower(), None)
+                else:
+                    name, value = item.split(":", 1); out[name.strip().lower()] = (name.strip(), value.strip())
+    return list(out.values())
 class Handler(SimpleHTTPRequestHandler):
     def log_message(self,*args): pass
     def end_headers(self):
-        for line in (ROOT/'site'/'_headers').read_text().splitlines():
-            if line.startswith('  '):
-                name,value=line.strip().split(':',1);self.send_header(name,value.strip())
+        for name, value in site_headers(self.path.split('?')[0], (ROOT/'site'/'_headers').read_text(encoding='utf-8')):
+            self.send_header(name, value)
         super().end_headers()
 
 def main():
@@ -40,7 +55,7 @@ def main():
                 with path.open('wb') as fp:w.write(fp)
                 pdfs.append(str(path))
             browser=p.chromium.launch()
-            context=browser.new_context(viewport={'width':390,'height':844},is_mobile=True,has_touch=True,accept_downloads=True)
+            context=browser.new_context(viewport={'width':390,'height':844},is_mobile=True,has_touch=True,accept_downloads=True,service_workers='block')  # offline cache is covered by smoke.py; keep failure injection deterministic
             page=context.new_page();cdp=context.new_cdp_session(page)
             cdp.send('Emulation.setCPUThrottlingRate',{'rate':4})
             errors=[];external=[]

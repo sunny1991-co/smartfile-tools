@@ -4,3 +4,4 @@ __pycache__/
 .env
 site/assets/vendor/
 preview-output/
+site/sw.js

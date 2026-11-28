@@ -5,12 +5,27 @@ from pypdf import PdfReader, PdfWriter
 import zxingcpp
 from playwright.sync_api import sync_playwright, expect
 ROOT=Path(__file__).resolve().parents[1]
+def site_headers(url_path, text):
+    """Apply _headers like Cloudflare Pages: matching rules in order, '! Name' removes a header."""
+    rules, current = [], None
+    for line in text.splitlines():
+        if not line.strip(): continue
+        if not line.startswith(" "):
+            current = (line.strip(), []); rules.append(current)
+        elif current: current[1].append(line.strip())
+    out = {}
+    for pattern, lines in rules:
+        if pattern == url_path or (pattern.endswith("*") and url_path.startswith(pattern[:-1])):
+            for item in lines:
+                if item.startswith("!"): out.pop(item[1:].strip().lower(), None)
+                else:
+                    name, value = item.split(":", 1); out[name.strip().lower()] = (name.strip(), value.strip())
+    return list(out.values())
 class Quiet(http.server.SimpleHTTPRequestHandler):
     def log_message(self,*args): pass
     def end_headers(self):
-        for line in (ROOT/'site'/'_headers').read_text().splitlines():
-            if line.startswith('  '):
-                name,value=line.strip().split(':',1);self.send_header(name,value.strip())
+        for name, value in site_headers(self.path.split('?')[0], (ROOT/'site'/'_headers').read_text(encoding='utf-8')):
+            self.send_header(name, value)
         super().end_headers()
 server=http.server.ThreadingHTTPServer(('127.0.0.1',0),functools.partial(Quiet,directory=str(ROOT/'site')))
 threading.Thread(target=server.serve_forever,daemon=True).start()
@@ -243,6 +258,23 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
         page.set_viewport_size({'width':width,'height':height})
         page.goto(base+url)
         page.screenshot(path=str(screenshots/(name+'.png')),full_page=False)
+    # PWA: installable manifest, own-origin service worker, pages keep connect-src 'none', tools open offline.
+    man=page.request.get(base+'/manifest.webmanifest').json()
+    assert man['display']=='standalone' and man['start_url']=='/' and {i['sizes'] for i in man['icons']}=={'192x192','512x512'}
+    for icon in man['icons']:assert Image.open(__import__('io').BytesIO(page.request.get(base+icon['src']).body())).size==tuple(map(int,icon['sizes'].split('x')))
+    assert "connect-src 'self'" in page.request.get(base+'/sw.js').headers['content-security-policy']
+    assert "connect-src 'none'" in page.request.get(base+'/tools/compress/').headers['content-security-policy']
+    page.goto(base+'/tools/compress/');assert page.evaluate("navigator.serviceWorker.ready.then(r=>r.scope)")==base+'/'
+    page.reload();page.wait_for_function("navigator.serviceWorker.controller!==null",timeout=15000)
+    page.context.set_offline(True)
+    try:
+        for url,lang in (('/tools/compress-pdf/','en'),('/hi/tools/sheet-pdf/','hi'),('/','en')):
+            page.goto(base+url);assert page.locator('html').get_attribute('lang')==lang,url
+            if 'tools' in url:page.locator('#fields label').first.wait_for()
+        page.goto(base+'/tools/exam-photo/');page.locator('#files').set_input_files(str(fixture));run();assert page.locator('#result a').count()==1
+    finally:
+        page.context.set_offline(False)
+    print('PASS PWA manifest, icons, service worker scope, page CSP unchanged and offline tool pages')
     assert not errors,errors;assert not external,external
     browser.close()
 server.shutdown()

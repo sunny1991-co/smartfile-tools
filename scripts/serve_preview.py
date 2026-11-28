@@ -8,12 +8,26 @@ import argparse
 ROOT = Path(__file__).resolve().parent
 SITE = ROOT / "site"
 
+def site_headers(url_path, text):
+    """Apply _headers like Cloudflare Pages: matching rules in order, '! Name' removes a header."""
+    rules, current = [], None
+    for line in text.splitlines():
+        if not line.strip(): continue
+        if not line.startswith(" "):
+            current = (line.strip(), []); rules.append(current)
+        elif current: current[1].append(line.strip())
+    out = {}
+    for pattern, lines in rules:
+        if pattern == url_path or (pattern.endswith("*") and url_path.startswith(pattern[:-1])):
+            for item in lines:
+                if item.startswith("!"): out.pop(item[1:].strip().lower(), None)
+                else:
+                    name, value = item.split(":", 1); out[name.strip().lower()] = (name.strip(), value.strip())
+    return list(out.values())
 class Handler(SimpleHTTPRequestHandler):
     def end_headers(self):
-        for line in (SITE / "_headers").read_text(encoding="utf-8").splitlines():
-            if line.startswith("  "):
-                key, value = line.strip().split(":", 1)
-                self.send_header(key, value.strip())
+        for name, value in site_headers(self.path.split('?')[0], (SITE / "_headers").read_text(encoding='utf-8')):
+            self.send_header(name, value)
         super().end_headers()
 
 if __name__ == "__main__":
