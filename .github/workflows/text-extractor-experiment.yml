@@ -27,6 +27,8 @@ jobs:
       - run: python -m playwright install --with-deps chromium
       - run: sudo apt-get install -y fonts-noto-core
       - run: python test.py
+      - run: CF_PAGES=1 CF_PAGES_BRANCH=research/text-extractor node ../../scripts/build.cjs
+      - run: test -f ../../site/vendor/ocr/lang/hin.traineddata.gz && test ! -e ../../site/sitemap.xml && grep -q 'Disallow: /' ../../site/robots.txt && grep -q 'X-Robots-Tag: noindex' ../../site/_headers
       - uses: actions/upload-artifact@v4
         if: always()
         with:
