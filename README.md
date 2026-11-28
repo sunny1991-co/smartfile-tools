@@ -46,3 +46,6 @@ Scan to PDF uses tesseract.js 7.0.0 and tesseract.js-core 7.0.0 (Apache-2.0) wit
 
 ## PDF rendering dependency gate
 PDF to JPG uses pdfjs-dist 6.5.438 (Mozilla pdf.js, Apache-2.0), loaded with a dynamic import only on that tool page and run with isEvalSupported false, so page CSP needs no eval. scripts/vendor.cjs copies the module, worker, JPEG 2000/JBIG2/ICC WebAssembly decoders and their no-WASM fallbacks, standard fonts, ICC profiles and CMaps into site/assets/vendor/pdfjs/, and appends the decoder licenses. Only that folder gets `'wasm-unsafe-eval'` and `connect-src 'self'` in its own CSP; pages keep `connect-src 'none'`. The optional Node-only @napi-rs/canvas binary is never shipped. The service worker caches these files on first use, not at install.
+
+## Kruti Dev ↔ Unicode
+site/assets/krutidev.js converts Hindi between the legacy Kruti Dev 010 keyboard encoding and Unicode, both ways, on the device. It is loaded only on the converter page. The mapping is our own table of Kruti Dev 010 key codes (letters, half forms, common conjuncts, short-i and reph reordering). Rare ligatures may need a manual check; English letters cannot be represented in Kruti Dev and the page warns about them.

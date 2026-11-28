@@ -52,11 +52,11 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
         with page.expect_download() as event: page.locator('#result a').click()
         path=d/name;event.value.save_as(path);return path
     page.goto(base)
-    assert page.locator('.tile').count()==32
-    assert page.locator('.tile .tool-icon svg').count()==32
+    assert page.locator('.tile').count()==33
+    assert page.locator('.tile .tool-icon svg').count()==33
     assert page.locator('.tool-group').count()==3
     shapes=page.locator('.tile svg').evaluate_all("(xs)=>xs.map(x=>x.innerHTML)")
-    assert len(set(shapes))==32
+    assert len(set(shapes))==33
     assert page.locator('.category-nav a').count()==3
     page.locator('.category-nav a').first.click()
     assert page.evaluate("location.hash")=='#group-pdf'
@@ -70,7 +70,7 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     search.fill('photo se pdf');assert page.locator('.tile:visible').first.get_attribute('href')=='/tools/image-to-pdf/'
     search.fill('xyz-no-tool');assert page.locator('.tile:visible').count()==0
     expect(page.locator('#search-status')).to_contain_text('No tools found')
-    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==32
+    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==33
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     for width in (320,390,768,1280):
         page.set_viewport_size({'width':width,'height':844})
@@ -238,6 +238,13 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     go('mask-aadhaar');page.locator('#aadhaar-file').set_input_files(str(cardpdf));page.locator('button[type=submit]').click()
     expect(page.locator('#status')).to_have_text(re.compile(r'^Done'),timeout=180000);assert page.locator('#mask-info').inner_text().startswith('1 Aadhaar number covered')
     assert len(PdfReader(mask_dl('#mask-pdf','masked.pdf')).pages)==1
+    # Kruti Dev <-> Unicode: both directions, copy-ready text.
+    go('krutidev-unicode');page.locator('#kd-text').fill('Hkkjr ljdkj dk dk;kZy; ƒ„…A');page.locator('button[type=submit]').click()
+    expect(page.locator('#status')).to_have_text(re.compile(r'^Done'));assert page.locator('#kd-result').input_value()=='भारत सरकार का कार्यालय १२३।'
+    page.locator('#kd-direction').select_option('to-krutidev');page.locator('#kd-text').fill('श्री कृष्ण प्रिय विद्यालय');page.locator('button[type=submit]').click()
+    expect(page.locator('#status')).to_have_text(re.compile(r'^Done'));assert page.locator('#kd-result').input_value()=='Jh d`".k fiz; fo|ky;'
+    page.locator('#kd-direction').select_option('to-unicode');page.locator('#kd-text').fill('भारत');page.locator('button[type=submit]').click()
+    expect(page.locator('#status')).to_contain_text('already Unicode');assert page.locator('#kd-result').count()==0
     # Image to text: same OCR engine, text only.
     go('image-text');page.locator('#files').set_input_files(str(p1));page.locator('#scan-ocr').select_option('eng');page.locator('button[type=submit]').click()
     expect(page.locator('#status')).to_have_text(re.compile(r'^Done'),timeout=180000);t=page.locator('#ocr-text').input_value();assert 'SMARTFILE' in t and '2026' in t,t
@@ -338,11 +345,11 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     hrefs=page.locator('.tile:visible').evaluate_all("(xs)=>xs.map(x=>x.getAttribute('href'))")
     assert sorted(hrefs)==['/hi/tools/exam-photo/','/hi/tools/sign-pdf/','/hi/tools/signature/'],hrefs
     page.locator('#clear-search').click()
-    assert page.locator('.tile:visible').count()==32
-    assert page.locator('.tile').count()==32
-    assert page.locator('.tile .tool-icon svg').count()==32
+    assert page.locator('.tile:visible').count()==33
+    assert page.locator('.tile').count()==33
+    assert page.locator('.tile .tool-icon svg').count()==33
     assert page.locator('.tool-group').count()==3
-    for slug in ('exam-photo','compress-pdf','id-card','sheet-pdf','unlock-pdf','scan-pdf','pdf-jpg','name-date','sign-pdf','image-text','mask-aadhaar','compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf','photo-sheet','photo-studio','background-changer'):
+    for slug in ('exam-photo','compress-pdf','id-card','sheet-pdf','unlock-pdf','scan-pdf','pdf-jpg','name-date','sign-pdf','image-text','mask-aadhaar','krutidev-unicode','compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf','photo-sheet','photo-studio','background-changer'):
         page.goto(base+'/hi/tools/'+slug+'/')
         assert page.locator('html').get_attribute('lang')=='hi'
         assert page.locator('#fields label').count()>0
