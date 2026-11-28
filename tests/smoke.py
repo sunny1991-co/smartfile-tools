@@ -223,6 +223,8 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     expect(page.locator('#ty-preview')).to_have_text('डिजिटल भारत ने');page.locator('button[type=submit]').click()
     expect(page.locator('#status')).to_have_text(re.compile(r'^Done'));res=page.locator('#ty-result').inner_text();assert re.search(r'Correct words\s+3',res) and re.search(r'Mistakes[^\n]*\s+0',res),res
     page.locator('#ty-restart').click();assert page.locator('#ty-input').evaluate("e=>{const ev=new Event('paste',{cancelable:true});e.dispatchEvent(ev);return ev.defaultPrevented}")
+    page.locator('[data-tymode=hi-unicode]').click();assert page.locator('#ty-mode').input_value()=='hi-unicode' and page.locator('[data-tymode=hi-unicode]').get_attribute('aria-pressed')=='true' and page.locator('[data-tymode=en]').get_attribute('aria-pressed')=='false'
+    page.locator('#ty-input').fill('डिजिटल भारत');page.locator('button[type=submit]').click();expect(page.locator('#status')).to_have_text(re.compile(r'^Done'));assert re.search(r'Correct words\s+2',page.locator('#ty-result').inner_text())
     page.clock.install();page.reload();page.locator('#ty-input').wait_for();page.locator('#ty-minutes').select_option('1');page.locator('#ty-mode').select_option('en');page.locator('#ty-input').fill('Good typing')
     page.clock.run_for(61000);expect(page.locator('#ty-result')).to_be_visible();assert 'Time is up' in page.locator('#ty-timer').inner_text()
     print('PASS typing test scoring, Remington preview, restart, paste block and auto stop')
