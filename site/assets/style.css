@@ -58,3 +58,4 @@ nav a.language{border:1px solid var(--line);border-radius:8px;padding:2px 10px;c
 @media(max-width:560px){.top-grid,.tool-group .grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.top,.tool-group .tile,html[lang=hi] .tool-group .tile{padding:12px 4px 11px}.top .tool-icon,.tool-group .tile .tool-icon,html[lang=hi] .tool-group .tile .tool-icon{width:54px;height:54px}.top .tool-icon svg,.tool-group .tile .tool-icon svg{width:31px;height:31px}.top b,.tool-group .tile h2,html[lang=hi] .tool-group .tile h2{font-size:13.5px}}
 .popular{display:block}.popular h2{margin:0 0 12px}.top-grid{width:100%}
 @media(max-width:560px){.hero.compact{padding:14px 16px;margin:12px 0 16px}.hero.compact h1{font-size:23px}.hero.compact .sub{font-size:13.5px}}
+.kd-live-box{display:grid;gap:8px}.kd-live-title{margin:0;font-weight:700;color:var(--teal)}.kd-live{font-size:20px;min-height:72px;white-space:pre-wrap}

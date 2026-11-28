@@ -291,7 +291,12 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     expect(page.locator('#status')).to_have_text(re.compile(r'^Done'));assert page.locator('#kd-result').input_value()=='भारत सरकार का कार्यालय १२३।'
     page.locator('#kd-direction').select_option('to-krutidev');page.locator('#kd-text').fill('श्री कृष्ण प्रिय विद्यालय');page.locator('button[type=submit]').click()
     expect(page.locator('#status')).to_have_text(re.compile(r'^Done'));assert page.locator('#kd-result').input_value()=='Jh d`".k fiz; fo|ky;'
-    page.locator('#kd-direction').select_option('to-unicode');page.locator('#kd-text').fill('भारत');page.locator('button[type=submit]').click()
+    # Live typing: result updates on every key, direction switches by itself, mixed text keeps the chosen direction.
+    go('krutidev-unicode');box=page.locator('#kd-text')
+    box.press_sequentially('fgUnh Hkk"kk');expect(page.locator('#kd-live')).to_have_text('हिन्दी भाषा');assert page.locator('#kd-direction').input_value()=='to-unicode'
+    box.fill('');box.press_sequentially('भारत');expect(page.locator('#kd-live')).to_have_text('Hkkjr');assert page.locator('#kd-direction').input_value()=='to-krutidev'
+    page.locator('#kd-clear').click();assert box.input_value()=='' and page.locator('#kd-live').inner_text()==''
+    page.locator('#kd-direction').select_option('to-unicode');box.fill('भारत abc');page.locator('button[type=submit]').click()
     expect(page.locator('#status')).to_contain_text('already Unicode');assert page.locator('#kd-result').count()==0
     # Calculators: values checked against the standard formulas (bank FD/RD convention, SIP at month start, reducing-balance EMI).
     def calc(slug,fill,ids=()):
