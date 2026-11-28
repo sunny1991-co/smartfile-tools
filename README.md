@@ -40,3 +40,6 @@ See [performance gate](docs/PERFORMANCE_GATE.md). Synthetic CPU/network-throttle
 
 ## Visual tool library
 Original SVG icons, grouped bilingual tool cards, compact mobile layout. See [visual design gate](docs/VISUAL_DESIGN.md). No extra icon/font dependencies.
+
+## OCR dependency gate
+Scan to PDF uses tesseract.js 7.0.0 and tesseract.js-core 7.0.0 (Apache-2.0) with the 4.0.0_best_int Hindi and English models from @tesseract.js-data 1.0.0 (package MIT; models from tesseract-ocr tessdata_best, Apache-2.0). scripts/vendor.cjs copies only the worker, three LSTM WebAssembly cores and the two language files into site/assets/vendor/tesseract/; nothing loads from a CDN. Only that folder gets `'wasm-unsafe-eval'` and `connect-src 'self'` in its own CSP (see site/_headers); pages keep `connect-src 'none'`. The service worker does not precache OCR files (about 16 MB); they are cached after first use. Re-audit before each release.

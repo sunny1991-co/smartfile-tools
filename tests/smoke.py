@@ -52,15 +52,15 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
         with page.expect_download() as event: page.locator('#result a').click()
         path=d/name;event.value.save_as(path);return path
     page.goto(base)
-    assert page.locator('.tile').count()==26
-    assert page.locator('.tile .tool-icon svg').count()==26
+    assert page.locator('.tile').count()==27
+    assert page.locator('.tile .tool-icon svg').count()==27
     assert page.locator('.tool-group').count()==3
     shapes=page.locator('.tile svg').evaluate_all("(xs)=>xs.map(x=>x.innerHTML)")
-    assert len(set(shapes))==26
+    assert len(set(shapes))==27
     assert page.locator('.category-nav a').count()==3
     page.locator('.category-nav a').first.click()
     assert page.evaluate("location.hash")=='#group-pdf'
-    assert page.locator('#group-pdf .tile').count()==11
+    assert page.locator('#group-pdf .tile').count()==12
     search=page.locator('#tool-search')
     expect(search).to_be_visible()
     search.fill('merge pdf');assert page.locator('.tile:visible').count()==1
@@ -70,7 +70,7 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     search.fill('photo se pdf');assert page.locator('.tile:visible').count()==1
     search.fill('xyz-no-tool');assert page.locator('.tile:visible').count()==0
     expect(page.locator('#search-status')).to_contain_text('No tools found')
-    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==26
+    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==27
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     for width in (320,390,768,1280):
         page.set_viewport_size({'width':width,'height':844})
@@ -191,6 +191,34 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
         expect(page.locator('#status')).to_have_class('error',timeout=30000);assert msg in page.locator('#status').inner_text() and page.locator('#result a').count()==0
     go('unlock-pdf');page.locator('#pdf-files').set_input_files(str(heavy));page.locator('button[type=submit]').click()
     expect(page.locator('#status')).to_have_text('This PDF is not password protected.',timeout=30000)
+    # Scan to PDF + OCR: dark background is trimmed to the paper, pages become a PDF, OCR reads the text (all local files).
+    from PIL import ImageDraw,ImageFont
+    def paper_photo(path,line):
+        im=Image.new('RGB',(1600,1200),(45,40,38));dr=ImageDraw.Draw(im);dr.rectangle([300,150,1299,1049],fill=(245,243,236))
+        try:font=ImageFont.truetype('DejaVuSans-Bold.ttf',64)
+        except OSError:font=ImageFont.load_default(size=64)
+        for k,t in enumerate(('SMARTFILE OCR TEST',line,'INVOICE 12345')):dr.text((380,260+k*180),t,fill=(20,20,20),font=font)
+        im.save(path,quality=92)
+    p1=d/'scan1.jpg';p2=d/'scan2.jpg';paper_photo(p1,'YEAR 2026');paper_photo(p2,'PAGE TWO 2027')
+    def scan(lang):
+        go('scan-pdf');page.locator('#files').set_input_files([str(p1),str(p2)]);page.locator('#scan-ocr').select_option(lang)
+        page.locator('button[type=submit]').click();expect(page.locator('#status')).to_have_text(re.compile(r'^Done'),timeout=180000)
+    scan('eng')
+    with page.expect_download() as event: page.locator('#result a').first.click()
+    out=d/'scan.pdf';event.value.save_as(out);r=PdfReader(out);assert len(r.pages)==2
+    with page.expect_download() as event: page.locator('#result a').nth(1).click()
+    assert event.value.suggested_filename=='smartfile-scan-text.txt'
+    pw,ph=r.pages[0].images[0].image.size;assert abs(pw/ph-1000/900)<.06,(pw,ph)
+    text=page.locator('#ocr-text').input_value();assert 'SMARTFILE' in text and '2026' in text and '2027' in text,text
+    assert 'background trimmed on 2' in page.locator('#result').inner_text()
+    scan('hin+eng');mixed=page.locator('#ocr-text').input_value();assert 'SMARTFILE' in mixed and '2026' in mixed,mixed
+    deva=Path('/usr/share/fonts/truetype/freefont/FreeSans.ttf')  # installed by playwright --with-deps on Ubuntu
+    if deva.exists():
+        im=Image.new('RGB',(1600,1200),(45,40,38));dr=ImageDraw.Draw(im);dr.rectangle([300,150,1299,1049],fill=(245,243,236));fh=ImageFont.truetype(str(deva),72)
+        for k,t in enumerate(('भारत सरकार','आधार कार्ड 2026','नाम: राम कुमार')):dr.text((380,260+k*180),t,fill=(20,20,20),font=fh)
+        im.save(p1,quality=92);p2=p1;scan('hin');hindi_text=page.locator('#ocr-text').input_value()
+        assert 'भारत' in hindi_text and 'आधार' in hindi_text and '2026' in hindi_text,hindi_text
+        print('PASS Hindi OCR')
     go('photo-sheet');page.locator('#files').set_input_files(str(fixture));page.locator('#paper').select_option('4x6');page.locator('#copies').select_option('6');run()
     sheet=Image.open(get('sheet-6.jpg'));assert sheet.size==(1200,1800);assert '6 photos' in page.locator('#result').inner_text()
     page.locator('#paper').select_option('a4');page.locator('#copies').select_option('12');run()
@@ -244,11 +272,11 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     hrefs=page.locator('.tile:visible').evaluate_all("(xs)=>xs.map(x=>x.getAttribute('href'))")
     assert sorted(hrefs)==['/hi/tools/exam-photo/','/hi/tools/signature/'],hrefs
     page.locator('#clear-search').click()
-    assert page.locator('.tile:visible').count()==26
-    assert page.locator('.tile').count()==26
-    assert page.locator('.tile .tool-icon svg').count()==26
+    assert page.locator('.tile:visible').count()==27
+    assert page.locator('.tile').count()==27
+    assert page.locator('.tile .tool-icon svg').count()==27
     assert page.locator('.tool-group').count()==3
-    for slug in ('exam-photo','compress-pdf','id-card','sheet-pdf','unlock-pdf','compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf','photo-sheet','photo-studio','background-changer'):
+    for slug in ('exam-photo','compress-pdf','id-card','sheet-pdf','unlock-pdf','scan-pdf','compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf','photo-sheet','photo-studio','background-changer'):
         page.goto(base+'/hi/tools/'+slug+'/')
         assert page.locator('html').get_attribute('lang')=='hi'
         assert page.locator('#fields label').count()>0

@@ -1,0 +1,10 @@
+@tesseract.js-data/eng 1.0.0 and @tesseract.js-data/hin 1.0.0
+Package metadata: license MIT, author Balearica, https://github.com/naptha/tessdata
+The npm packages ship no separate license file.
+
+SmartFile copies only 4.0.0_best_int/eng.traineddata.gz and
+4.0.0_best_int/hin.traineddata.gz. These are integer versions of the
+Tesseract OCR "tessdata_best" language models by the tesseract-ocr project,
+https://github.com/tesseract-ocr/tessdata_best, licensed under the Apache
+License, Version 2.0 (the full Apache 2.0 text is included in this
+file under tesseract.js-core). Review these terms before redistribution.
