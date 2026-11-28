@@ -30,4 +30,33 @@ for(const [i,p] of out.getPages().entries()){const v=visiblePage(p),text=mark?wo
 progress("Saving PDF…","PDF सेव हो रही है…");await breathe();const output=await out.save({objectsPerTick:25});finish(output,"smartfile-"+tool+".pdf",indices.length);
 }
 
-self.onmessage=async e=>{try{job=e.data;tool=job.tool;if(!Array.isArray(job.files)||!["merge-pdf","split-pdf","remove-pdf-pages","rotate-pdf","reorder-pdf","watermark-pdf","number-pdf"].includes(tool))fail("Invalid PDF operation.");if(tool==="merge-pdf"||tool==="split-pdf")await editPdf();else await transformPdf();}catch(err){postMessage({type:"error",message:err.message||"Unable to process input."});}};
+
+// Recompress image XObjects (scans/photos) to JPEG until the whole file fits the target.
+const LEVELS=[[1,.82],[1,.65],[.85,.6],[.72,.55],[.62,.5],[.52,.45],[.45,.4],[.38,.36],[.32,.32]];
+const MIN_LONG_SIDE=500;
+function nameOf(v){return v&&v.asString?v.asString():String(v||"");}
+async function inflate(bytes){const ds=new DecompressionStream("deflate");const out=new Response(new Blob([bytes]).stream().pipeThrough(ds));return new Uint8Array(await out.arrayBuffer());}
+async function decodeImage(stream){const d=stream.dict,N=PDFLib.PDFName;const filter=d.lookup(N.of("Filter")),filters=filter instanceof PDFLib.PDFArray?filter.asArray().map(nameOf):filter?[nameOf(filter)]:[];
+if(d.lookup(N.of("ImageMask"))||d.lookup(N.of("Decode")))return null;const w=d.lookup(N.of("Width"))?.asNumber?.(),h=d.lookup(N.of("Height"))?.asNumber?.();if(!w||!h||w*h>40000000)return null;
+const cs=nameOf(d.lookup(N.of("ColorSpace")));
+if(filters.length===1&&filters[0]==="/DCTDecode"){if(cs!=="/DeviceRGB"&&cs!=="/DeviceGray")return null;return {w,h,bitmap:await createImageBitmap(new Blob([stream.contents],{type:"image/jpeg"}))};}
+if(filters.length===1&&filters[0]==="/FlateDecode"&&!d.lookup(N.of("DecodeParms"))&&d.lookup(N.of("BitsPerComponent"))?.asNumber?.()===8&&(cs==="/DeviceRGB"||cs==="/DeviceGray")){const raw=await inflate(stream.contents),ch=cs==="/DeviceRGB"?3:1;if(raw.length<w*h*ch)return null;const rgba=new Uint8ClampedArray(w*h*4);for(let i=0,j=0;i<w*h;i++,j+=ch){rgba[i*4]=raw[j];rgba[i*4+1]=raw[ch===3?j+1:j];rgba[i*4+2]=raw[ch===3?j+2:j];rgba[i*4+3]=255;}return {w,h,bitmap:await createImageBitmap(new ImageData(rgba,w,h))};}
+return null;}
+async function compressPdf(){if(!globalThis.PDFLib)fail("PDF engine unavailable. Reload and try again.");if(typeof OffscreenCanvas!=="function"||typeof DecompressionStream!=="function")fail("This browser cannot compress PDF images. Try a recent Chrome or Edge.");
+const f=job.files[0];if(!f||!f.size||f.size>50*1024*1024)fail("Choose one PDF up to 50 MB.");const target=Number(job.targetKb);if(!Number.isInteger(target)||target<20||target>50000)fail("Enter a target between 20 and 50000 KB.");const limit=target*1024;
+const bytes=new Uint8Array(await f.arrayBuffer());if(new TextDecoder().decode(bytes.slice(0,5))!=="%PDF-")fail("Input is not a PDF.");
+const open=async()=>{try{return await PDFLib.PDFDocument.load(bytes,{ignoreEncryption:false,throwOnInvalidObject:true,updateMetadata:false});}catch(e){fail(/encrypt/i.test(String(e&&e.message))?"Encrypted or password-protected PDFs are not supported.":"PDF could not be opened.");}};
+progress("Reading PDF…","PDF पढ़ रहे हैं…");await breathe();let doc=await open();const count=doc.getPageCount();if(count<1||count>200)fail("Each PDF must contain 1–200 pages.");
+// Plain re-save first: object streams alone may be enough.
+let best=await doc.save({useObjectStreams:true,objectsPerTick:25});if(best.length<=limit){finish(best,"smartfile-compress-pdf.pdf",count);return;}
+const images=[];for(const [ref,obj] of doc.context.enumerateIndirectObjects()){if(obj instanceof PDFLib.PDFRawStream&&nameOf(obj.dict.lookup(PDFLib.PDFName.of("Subtype")))==="/Image")images.push(ref);}
+if(!images.length)fail("This PDF has no photos that can be compressed, so it cannot be made smaller here.");
+for(const [n,[scale,quality]] of LEVELS.entries()){progress(`Compressing photos (step ${n+1} of ${LEVELS.length})…`,`फोटो कंप्रेस हो रही हैं (चरण ${n+1} / ${LEVELS.length})…`);await breathe();doc=await open();let changed=0;
+for(const ref of images){const obj=doc.context.lookup(ref);if(!(obj instanceof PDFLib.PDFRawStream))continue;let img;try{img=await decodeImage(obj);}catch(e){img=null;}if(!img)continue;
+try{const long=Math.max(img.w,img.h),s=Math.min(1,Math.max(scale,MIN_LONG_SIDE/long)),w=Math.max(1,Math.round(img.w*s)),h=Math.max(1,Math.round(img.h*s));const c=new OffscreenCanvas(w,h),ctx=c.getContext("2d");ctx.fillStyle="white";ctx.fillRect(0,0,w,h);ctx.drawImage(img.bitmap,0,0,w,h);
+const jpg=new Uint8Array(await (await c.convertToBlob({type:"image/jpeg",quality})).arrayBuffer());if(jpg.length>=obj.contents.length)continue;
+const N=PDFLib.PDFName,dict={Type:"XObject",Subtype:"Image",Width:w,Height:h,ColorSpace:"DeviceRGB",BitsPerComponent:8,Filter:"DCTDecode"};const next=doc.context.stream(jpg,dict),smask=obj.dict.get(N.of("SMask"));if(smask)next.dict.set(N.of("SMask"),smask);const intent=obj.dict.get(N.of("Intent"));if(intent)next.dict.set(N.of("Intent"),intent);doc.context.assign(ref,next);changed++;}finally{img.bitmap.close();}}
+const out=await doc.save({useObjectStreams:true,objectsPerTick:25});if(out.length<best.length)best=out;if(best.length<=limit){finish(best,"smartfile-compress-pdf.pdf",count);return;}if(!changed&&n>1)break;}
+fail("Could not reach the target without making pages unreadable. Choose a larger target.");}
+
+self.onmessage=async e=>{try{job=e.data;tool=job.tool;if(!Array.isArray(job.files)||!["compress-pdf","merge-pdf","split-pdf","remove-pdf-pages","rotate-pdf","reorder-pdf","watermark-pdf","number-pdf"].includes(tool))fail("Invalid PDF operation.");if(tool==="compress-pdf")await compressPdf();else if(tool==="merge-pdf"||tool==="split-pdf")await editPdf();else await transformPdf();}catch(err){postMessage({type:"error",message:err.message||"Unable to process input."});}};

@@ -37,25 +37,25 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
         with page.expect_download() as event: page.locator('#result a').click()
         path=d/name;event.value.save_as(path);return path
     page.goto(base)
-    assert page.locator('.tile').count()==22
-    assert page.locator('.tile .tool-icon svg').count()==22
+    assert page.locator('.tile').count()==23
+    assert page.locator('.tile .tool-icon svg').count()==23
     assert page.locator('.tool-group').count()==3
     shapes=page.locator('.tile svg').evaluate_all("(xs)=>xs.map(x=>x.innerHTML)")
-    assert len(set(shapes))==22
+    assert len(set(shapes))==23
     assert page.locator('.category-nav a').count()==3
     page.locator('.category-nav a').first.click()
     assert page.evaluate("location.hash")=='#group-pdf'
-    assert page.locator('#group-pdf .tile').count()==8
+    assert page.locator('#group-pdf .tile').count()==9
     search=page.locator('#tool-search')
     expect(search).to_be_visible()
     search.fill('merge pdf');assert page.locator('.tile:visible').count()==1
     assert page.locator('.tile:visible').get_attribute('href')=='/tools/merge-pdf/'
-    search.fill('५० kb');assert page.locator('.tile:visible').count()==1
-    assert page.locator('.tile:visible').get_attribute('href')=='/tools/compress/'
+    search.fill('५० kb');hrefs=page.locator('.tile:visible').evaluate_all("(xs)=>xs.map(x=>x.getAttribute('href'))")
+    assert '/tools/compress/' in hrefs and set(hrefs)<= {'/tools/compress/','/tools/compress-pdf/'},hrefs
     search.fill('photo se pdf');assert page.locator('.tile:visible').count()==1
     search.fill('xyz-no-tool');assert page.locator('.tile:visible').count()==0
     expect(page.locator('#search-status')).to_contain_text('No tools found')
-    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==22
+    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==23
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     for width in (320,390,768,1280):
         page.set_viewport_size({'width':width,'height':844})
@@ -113,6 +113,17 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     go('exam-photo');page.locator('#exam').select_option('custom');page.locator('#width').fill('3000');page.locator('#height').fill('3000');page.locator('#min-kb').fill('1');page.locator('#max-kb').fill('2')
     page.locator('#files').set_input_files(str(fixture));page.locator('button[type=submit]').click()
     expect(page.locator('#status')).to_have_class('error',timeout=30000);assert page.locator('#result a').count()==0
+    # Compress PDF: heavy scanned pages fit the KB target, page count and page size stay.
+    scans=[Image.frombytes('RGB',(1700,2300),random.randbytes(1700*2300*3)) for _ in range(3)]
+    heavy=d/'scans.pdf';scans[0].save(heavy,save_all=True,append_images=scans[1:],resolution=200,quality=95)
+    assert heavy.stat().st_size>3*1024*1024
+    go('compress-pdf');page.locator('#pdf-files').set_input_files(str(heavy));page.locator('[data-pdfkb="500"]').click()
+    assert page.locator('#target-kb').input_value()=='500';run()
+    out=get('small.pdf');r=PdfReader(out);src=PdfReader(heavy)
+    assert out.stat().st_size<=500*1024,out.stat().st_size
+    assert len(r.pages)==3 and [tuple(p.mediabox) for p in r.pages]==[tuple(p.mediabox) for p in src.pages]
+    go('compress-pdf');page.locator('#pdf-files').set_input_files(str(heavy));page.locator('#target-kb').fill('20');page.locator('button[type=submit]').click()
+    expect(page.locator('#status')).to_have_class('error',timeout=60000);assert page.locator('#result a').count()==0
     go('photo-sheet');page.locator('#files').set_input_files(str(fixture));page.locator('#paper').select_option('4x6');page.locator('#copies').select_option('6');run()
     sheet=Image.open(get('sheet-6.jpg'));assert sheet.size==(1200,1800);assert '6 photos' in page.locator('#result').inner_text()
     page.locator('#paper').select_option('a4');page.locator('#copies').select_option('12');run()
@@ -166,11 +177,11 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     hrefs=page.locator('.tile:visible').evaluate_all("(xs)=>xs.map(x=>x.getAttribute('href'))")
     assert sorted(hrefs)==['/hi/tools/exam-photo/','/hi/tools/signature/'],hrefs
     page.locator('#clear-search').click()
-    assert page.locator('.tile:visible').count()==22
-    assert page.locator('.tile').count()==22
-    assert page.locator('.tile .tool-icon svg').count()==22
+    assert page.locator('.tile:visible').count()==23
+    assert page.locator('.tile').count()==23
+    assert page.locator('.tile .tool-icon svg').count()==23
     assert page.locator('.tool-group').count()==3
-    for slug in ('exam-photo','compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf','photo-sheet','photo-studio','background-changer'):
+    for slug in ('exam-photo','compress-pdf','compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf','photo-sheet','photo-studio','background-changer'):
         page.goto(base+'/hi/tools/'+slug+'/')
         assert page.locator('html').get_attribute('lang')=='hi'
         assert page.locator('#fields label').count()>0
