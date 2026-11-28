@@ -9,7 +9,7 @@ from urllib.parse import urljoin, urlsplit
 from xml.etree import ElementTree
 
 ORIGIN = "https://smartfile-tools.pages.dev"
-TOOLS = "exam-photo compress-pdf id-card sheet-pdf unlock-pdf scan-pdf pdf-jpg name-date sign-pdf image-text compress resize signature crop passport image-to-pdf age convert inspect merge-pdf split-pdf qr words remove-pdf-pages rotate-pdf reorder-pdf watermark-pdf number-pdf photo-sheet photo-studio background-changer".split()
+TOOLS = "exam-photo compress-pdf id-card sheet-pdf unlock-pdf scan-pdf pdf-jpg name-date sign-pdf image-text mask-aadhaar compress resize signature crop passport image-to-pdf age convert inspect merge-pdf split-pdf qr words remove-pdf-pages rotate-pdf reorder-pdf watermark-pdf number-pdf photo-sheet photo-studio background-changer".split()
 PAGES = [prefix + suffix for prefix in ("", "/hi") for suffix in ("/", "/privacy/", "/terms/", "/about/", *("/tools/" + t + "/" for t in TOOLS))]
 ASSETS = ["/assets/style.css", "/assets/tools.js", "/assets/library.js", "/assets/photo-studio.js", "/assets/background.js", "/assets/background-worker.js", "/assets/pdf-worker.js", "/assets/icon.svg", "/assets/vendor/pdf-lib.min.js", "/assets/vendor/qrcode.js", "/assets/vendor/THIRD-PARTY-LICENSES.txt", "/assets/pwa.js", "/assets/icon-192.png", "/assets/icon-512.png", "/assets/icon-512-maskable.png", "/manifest.webmanifest", "/sw.js", "/assets/vendor/tesseract/tesseract.min.js", "/assets/vendor/tesseract/worker.min.js", "/assets/vendor/tesseract/lang/hin.traineddata.gz", "/assets/vendor/pdfjs/pdf.min.mjs", "/assets/vendor/pdfjs/pdf.worker.min.mjs"]
 

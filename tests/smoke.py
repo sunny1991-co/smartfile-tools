@@ -52,11 +52,11 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
         with page.expect_download() as event: page.locator('#result a').click()
         path=d/name;event.value.save_as(path);return path
     page.goto(base)
-    assert page.locator('.tile').count()==31
-    assert page.locator('.tile .tool-icon svg').count()==31
+    assert page.locator('.tile').count()==32
+    assert page.locator('.tile .tool-icon svg').count()==32
     assert page.locator('.tool-group').count()==3
     shapes=page.locator('.tile svg').evaluate_all("(xs)=>xs.map(x=>x.innerHTML)")
-    assert len(set(shapes))==31
+    assert len(set(shapes))==32
     assert page.locator('.category-nav a').count()==3
     page.locator('.category-nav a').first.click()
     assert page.evaluate("location.hash")=='#group-pdf'
@@ -67,10 +67,10 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     assert page.locator('.tile:visible').get_attribute('href')=='/tools/merge-pdf/'
     search.fill('५० kb');hrefs=page.locator('.tile:visible').evaluate_all("(xs)=>xs.map(x=>x.getAttribute('href'))")
     assert '/tools/compress/' in hrefs and set(hrefs)<= {'/tools/compress/','/tools/compress-pdf/'},hrefs
-    search.fill('photo se pdf');assert page.locator('.tile:visible').count()==1
+    search.fill('photo se pdf');assert page.locator('.tile:visible').first.get_attribute('href')=='/tools/image-to-pdf/'
     search.fill('xyz-no-tool');assert page.locator('.tile:visible').count()==0
     expect(page.locator('#search-status')).to_contain_text('No tools found')
-    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==31
+    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==32
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     for width in (320,390,768,1280):
         page.set_viewport_size({'width':width,'height':844})
@@ -212,6 +212,32 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     text=page.locator('#ocr-text').input_value();assert 'SMARTFILE' in text and '2026' in text and '2027' in text,text
     assert 'background trimmed on 2' in page.locator('#result').inner_text()
     scan('hin+eng');mixed=page.locator('#ocr-text').input_value();assert 'SMARTFILE' in mixed and '2026' in mixed,mixed
+    # Masked Aadhaar: OCR finds the 12-digit number, the first 8 digits are burned black, the VID is left alone; manual boxes and PDF input work.
+    card=Image.new('RGB',(1400,880),'white');dr=ImageDraw.Draw(card)
+    try:big=ImageFont.truetype('DejaVuSans-Bold.ttf',72);small=ImageFont.truetype('DejaVuSans.ttf',40)
+    except OSError:big=ImageFont.load_default(size=72);small=ImageFont.load_default(size=40)
+    dr.text((60,60),'Government of India',fill='black',font=small);dr.text((60,150),'Name: Ram Kumar',fill='black',font=small);dr.text((60,220),'DOB: 01/01/1990',fill='black',font=small)
+    dr.text((300,560),'1234 5678 9012',fill='black',font=big);dr.text((300,720),'VID: 9100 2345 6789 0123',fill='black',font=small)
+    first8=dr.textbbox((300,560),'1234 5678',font=big);last4=dr.textbbox((300,560),'1234 5678 9012',font=big);last4=(last4[2]-150,last4[1],last4[2],last4[3])
+    vid=dr.textbbox((300,720),'VID: 9100 2345',font=small)
+    cardp=d/'aadhaar.png';card.save(cardp)
+    def mask_dl(btn,name):
+        with page.expect_download() as event: page.locator(btn).click()
+        out=d/name;event.value.save_as(out);return out
+    go('mask-aadhaar');page.locator('#aadhaar-file').set_input_files(str(cardp));page.locator('button[type=submit]').click()
+    expect(page.locator('#status')).to_have_text(re.compile(r'^Done'),timeout=180000);assert page.locator('#mask-info').inner_text().startswith('1 Aadhaar number covered automatically'),page.locator('#mask-info').inner_text()
+    m=Image.open(mask_dl('#mask-jpg','masked.jpg')).convert('L');assert m.size==card.size
+    assert __import__('statistics').mean(m.crop(first8).getdata())<40,'first 8 digits not covered'
+    assert m.crop(last4).getextrema()==(m.crop(last4).getextrema()[0],255) and m.crop(last4).getextrema()[0]<80,'last 4 digits should stay visible'
+    assert m.crop(vid).getextrema()[1]==255,'VID must not be masked'
+    box=page.locator('canvas.mask-preview').bounding_box();page.mouse.move(box['x']+box['width']*.75,box['y']+box['height']*.05);page.mouse.down();page.mouse.move(box['x']+box['width']*.95,box['y']+box['height']*.25,steps=5);page.mouse.up()
+    assert '2 boxes in total' in page.locator('#mask-info').inner_text()
+    m=Image.open(mask_dl('#mask-jpg','masked2.jpg')).convert('L');corner=m.crop((int(1400*.78),int(880*.08),int(1400*.92),int(880*.22)));assert max(corner.getdata())<40,'manual box not burned in'
+    page.locator('#mask-undo').click();assert '1 box in total' in page.locator('#mask-info').inner_text()
+    cardpdf=d/'e-aadhaar.pdf';card.save(cardpdf,resolution=150)
+    go('mask-aadhaar');page.locator('#aadhaar-file').set_input_files(str(cardpdf));page.locator('button[type=submit]').click()
+    expect(page.locator('#status')).to_have_text(re.compile(r'^Done'),timeout=180000);assert page.locator('#mask-info').inner_text().startswith('1 Aadhaar number covered')
+    assert len(PdfReader(mask_dl('#mask-pdf','masked.pdf')).pages)==1
     # Image to text: same OCR engine, text only.
     go('image-text');page.locator('#files').set_input_files(str(p1));page.locator('#scan-ocr').select_option('eng');page.locator('button[type=submit]').click()
     expect(page.locator('#status')).to_have_text(re.compile(r'^Done'),timeout=180000);t=page.locator('#ocr-text').input_value();assert 'SMARTFILE' in t and '2026' in t,t
@@ -312,11 +338,11 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     hrefs=page.locator('.tile:visible').evaluate_all("(xs)=>xs.map(x=>x.getAttribute('href'))")
     assert sorted(hrefs)==['/hi/tools/exam-photo/','/hi/tools/sign-pdf/','/hi/tools/signature/'],hrefs
     page.locator('#clear-search').click()
-    assert page.locator('.tile:visible').count()==31
-    assert page.locator('.tile').count()==31
-    assert page.locator('.tile .tool-icon svg').count()==31
+    assert page.locator('.tile:visible').count()==32
+    assert page.locator('.tile').count()==32
+    assert page.locator('.tile .tool-icon svg').count()==32
     assert page.locator('.tool-group').count()==3
-    for slug in ('exam-photo','compress-pdf','id-card','sheet-pdf','unlock-pdf','scan-pdf','pdf-jpg','name-date','sign-pdf','image-text','compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf','photo-sheet','photo-studio','background-changer'):
+    for slug in ('exam-photo','compress-pdf','id-card','sheet-pdf','unlock-pdf','scan-pdf','pdf-jpg','name-date','sign-pdf','image-text','mask-aadhaar','compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf','photo-sheet','photo-studio','background-changer'):
         page.goto(base+'/hi/tools/'+slug+'/')
         assert page.locator('html').get_attribute('lang')=='hi'
         assert page.locator('#fields label').count()>0
