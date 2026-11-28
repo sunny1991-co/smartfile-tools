@@ -52,11 +52,11 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
         with page.expect_download() as event: page.locator('#result a').click()
         path=d/name;event.value.save_as(path);return path
     page.goto(base)
-    assert page.locator('.tile').count()==42
-    assert page.locator('.tile .tool-icon svg').count()==42
+    assert page.locator('.tile').count()==47
+    assert page.locator('.tile .tool-icon svg').count()==47
     assert page.locator('.tool-group').count()==4
     shapes=page.locator('.tile svg').evaluate_all("(xs)=>xs.map(x=>x.innerHTML)")
-    assert len(set(shapes))==42
+    assert len(set(shapes))==47
     assert page.locator('.category-nav a').count()==4
     page.locator('.category-nav a').first.click()
     assert page.evaluate("location.hash")=='#group-pdf'
@@ -70,7 +70,7 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     search.fill('photo se pdf');assert page.locator('.tile:visible').first.get_attribute('href')=='/tools/image-to-pdf/'
     search.fill('xyz-no-tool');assert page.locator('.tile:visible').count()==0
     expect(page.locator('#search-status')).to_contain_text('No tools found')
-    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==42
+    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==47
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     for width in (320,390,768,1280):
         page.set_viewport_size({'width':width,'height':844})
@@ -319,6 +319,21 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     go('percentage-calculator');page.locator('#c-kind').select_option('is');page.locator('#c-a').fill('5');page.locator('#c-b').fill('0');page.locator('button[type=submit]').click()
     expect(page.locator('#status')).to_have_class('error');assert page.locator('#calc-result').count()==0
     print('PASS FD, RD, SIP, EMI, GST and percentage calculators')
+    # Income tax FY 2025-26: ₹12.75 lakh salary is tax free in the new regime; known old-regime example.
+    go('income-tax-calculator');page.locator('#c-salary').fill('1275000');page.locator('#c-ded').fill('0');run();r=page.locator('#calc-result').inner_text()
+    assert re.search(r'Total tax\s+₹0\s',r),r;assert 'new regime saves' in page.locator('#result').inner_text()
+    page.locator('#c-salary').fill('1375000');run();assert re.search(r'Total tax\s+₹78,000',page.locator('#calc-result').inner_text())
+    page.locator('#c-salary').fill('1000000');page.locator('#c-ded').fill('150000');run();assert re.search(r'Total tax\s+₹\S+\s+₹75,400',page.locator('#calc-result').inner_text()),page.locator('#calc-result').inner_text()
+    r=calc('bmi-calculator',{'#c-kg':'70','#c-cm':'170'});assert '24.2' in r and 'Overweight' in r and 'Healthy' in r and '53.5–66.2 kg' in r,r
+    r=calc('cgpa-calculator',{'#c-val':'9.2'});assert '87.4%' in r,r
+    r=calc('cgpa-calculator',{'#c-dir':'from','#c-formula':'ten','#c-val':'82'});assert '8.2' in r,r
+    go('amount-in-words');page.locator('#c-amount').fill('1234567.89');run();r=page.locator('#calc-result').inner_text()
+    assert 'Twelve Lakh Thirty Four Thousand Five Hundred Sixty Seven Rupees and Eighty Nine Paise Only' in r and 'बारह लाख चौंतीस हज़ार पांच सौ सड़सठ रुपये नवासी पैसे मात्र' in r,r
+    # UPI QR: decode the printed QR independently and check the payment link.
+    go('upi-qr');page.locator('#upi-id').fill('sharma.store@okhdfcbank');page.locator('#upi-name').fill('Sharma General Store');page.locator('#upi-amount').fill('250');run()
+    upi=zxingcpp.read_barcodes(Image.open(get('upi.png')));assert upi and upi[0].text=='upi://pay?pa=sharma.store@okhdfcbank&pn=Sharma%20General%20Store&am=250.00&cu=INR',[x.text for x in upi]
+    go('upi-qr');page.locator('#upi-id').fill('not-an-id');page.locator('#upi-name').fill('X');page.locator('button[type=submit]').click();expect(page.locator('#status')).to_have_class('error');assert page.locator('#result a').count()==0
+    print('PASS income tax, BMI, CGPA, amount in words and UPI QR')
     # Image to text: same OCR engine, text only.
     go('image-text');page.locator('#files').set_input_files(str(p1));page.locator('#scan-ocr').select_option('eng');page.locator('button[type=submit]').click()
     expect(page.locator('#status')).to_have_text(re.compile(r'^Done'),timeout=180000);t=page.locator('#ocr-text').input_value();assert 'SMARTFILE' in t and '2026' in t,t
@@ -419,11 +434,11 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     hrefs=page.locator('.tile:visible').evaluate_all("(xs)=>xs.map(x=>x.getAttribute('href'))")
     assert sorted(hrefs)==['/hi/tools/exam-photo/','/hi/tools/sign-pdf/','/hi/tools/signature/'],hrefs
     page.locator('#clear-search').click()
-    assert page.locator('.tile:visible').count()==42
-    assert page.locator('.tile').count()==42
-    assert page.locator('.tile .tool-icon svg').count()==42
+    assert page.locator('.tile:visible').count()==47
+    assert page.locator('.tile').count()==47
+    assert page.locator('.tile .tool-icon svg').count()==47
     assert page.locator('.tool-group').count()==4
-    for slug in ('exam-photo','compress-pdf','id-card','sheet-pdf','unlock-pdf','scan-pdf','pdf-jpg','name-date','sign-pdf','image-text','mask-aadhaar','krutidev-unicode','lock-pdf','typing-test','resume-maker','fd-calculator','rd-calculator','sip-calculator','emi-calculator','gst-calculator','percentage-calculator','compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf','photo-sheet','photo-studio','background-changer'):
+    for slug in ('exam-photo','compress-pdf','id-card','sheet-pdf','unlock-pdf','scan-pdf','pdf-jpg','name-date','sign-pdf','image-text','mask-aadhaar','krutidev-unicode','lock-pdf','typing-test','resume-maker','fd-calculator','rd-calculator','sip-calculator','emi-calculator','gst-calculator','percentage-calculator','income-tax-calculator','upi-qr','amount-in-words','cgpa-calculator','bmi-calculator','compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf','photo-sheet','photo-studio','background-changer'):
         page.goto(base+'/hi/tools/'+slug+'/')
         assert page.locator('html').get_attribute('lang')=='hi'
         assert page.locator('#fields label').count()>0

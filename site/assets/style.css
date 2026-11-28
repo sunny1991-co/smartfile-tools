@@ -61,3 +61,6 @@ nav a.language{border:1px solid var(--line);border-radius:8px;padding:2px 10px;c
 .kd-live-box{display:grid;gap:8px}.kd-live-title{margin:0;font-weight:700;color:var(--teal)}.kd-live{font-size:20px;min-height:72px;white-space:pre-wrap}
 .mode-switch{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.mode-switch button{font:inherit;font-weight:750;font-size:16px;min-height:50px;border:2px solid var(--line);border-radius:12px;background:white;color:var(--ink);cursor:pointer}.mode-switch button[aria-pressed=true]{border-color:var(--blue);background:#eaf2ff;color:var(--blue)}
 .mode-select{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.typing-result tr.total td{font-weight:800;background:#eef7f5}.typing-result.words td:last-child{text-align:left;font-weight:650}
+.typing-result.wide td:last-child{font-weight:inherit}.typing-result.wide tr.total td{font-weight:800}.typing-result.words td:first-child{white-space:nowrap;width:1%;overflow-wrap:normal}
+.typing-result.wide tr.head td{font-weight:750}
