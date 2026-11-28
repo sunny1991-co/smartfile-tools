@@ -64,3 +64,4 @@ nav a.language{border:1px solid var(--line);border-radius:8px;padding:2px 10px;c
 .typing-result tr.total td{font-weight:800;background:#eef7f5}.typing-result.words td:last-child{text-align:left;font-weight:650}
 .typing-result.wide td:last-child{font-weight:inherit}.typing-result.wide tr.total td{font-weight:800}.typing-result.words td:first-child{white-space:nowrap;width:1%;overflow-wrap:normal}
 .typing-result.wide tr.head td{font-weight:750}
+.ed-stage{display:grid;gap:8px}.ed-nav{align-items:center}.ed-nav span{font-weight:650;color:var(--muted);font-size:14px}#ed-canvas{width:100%;height:auto;border:1px solid var(--line);border-radius:10px;touch-action:none;cursor:crosshair;background:#fff}

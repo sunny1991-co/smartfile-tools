@@ -52,15 +52,15 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
         with page.expect_download() as event: page.locator('#result a').click()
         path=d/name;event.value.save_as(path);return path
     page.goto(base)
-    assert page.locator('.tile').count()==47
-    assert page.locator('.tile .tool-icon svg').count()==47
+    assert page.locator('.tile').count()==51
+    assert page.locator('.tile .tool-icon svg').count()==51
     assert page.locator('.tool-group').count()==4
     shapes=page.locator('.tile svg').evaluate_all("(xs)=>xs.map(x=>x.innerHTML)")
-    assert len(set(shapes))==47
+    assert len(set(shapes))==51
     assert page.locator('.category-nav a').count()==4
     page.locator('.category-nav a').first.click()
     assert page.evaluate("location.hash")=='#group-pdf'
-    assert page.locator('#group-pdf .tile').count()==15
+    assert page.locator('#group-pdf .tile').count()==19
     search=page.locator('#tool-search')
     expect(search).to_be_visible()
     search.fill('merge pdf');assert page.locator('.tile:visible').count()==1
@@ -70,7 +70,7 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     search.fill('photo se pdf');assert page.locator('.tile:visible').first.get_attribute('href')=='/tools/image-to-pdf/'
     search.fill('xyz-no-tool');assert page.locator('.tile:visible').count()==0
     expect(page.locator('#search-status')).to_contain_text('No tools found')
-    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==47
+    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==51
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     for width in (320,390,768,1280):
         page.set_viewport_size({'width':width,'height':844})
@@ -334,6 +334,86 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     upi=zxingcpp.read_barcodes(Image.open(get('upi.png')));assert upi and upi[0].text=='upi://pay?pa=sharma.store@okhdfcbank&pn=Sharma%20General%20Store&am=250.00&cu=INR',[x.text for x in upi]
     go('upi-qr');page.locator('#upi-id').fill('not-an-id');page.locator('#upi-name').fill('X');page.locator('button[type=submit]').click();expect(page.locator('#status')).to_have_class('error');assert page.locator('#result a').count()==0
     print('PASS income tax, BMI, CGPA, amount in words and UPI QR')
+    # PDF to Word / Excel, Word to PDF and Edit PDF, with a text PDF and a .docx made here (no external files).
+    import zipfile
+    def make_office_files(d):
+        def text_pdf(path,pages):
+            # pages: list of [(x,y,size,text)], Helvetica, 595x842
+            objs=[];
+            def add(b): objs.append(b); return len(objs)
+            font=add(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>")
+            kids=[]; pages_id=None
+            content_ids=[]
+            for items in pages:
+                s="".join(f"BT /F1 {sz} Tf {x} {y} Td ({t.replace('(','[').replace(')',']')}) Tj ET\n" for x,y,sz,t in items).encode('latin-1')
+                content_ids.append(add(b"<< /Length %d >>\nstream\n"%len(s)+s+b"\nendstream"))
+            pages_id=len(objs)+1+len(pages)
+            for c in content_ids:
+                kids.append(add(f"<< /Type /Page /Parent {pages_id} 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 {font} 0 R >> >> /Contents {c} 0 R >>".encode()))
+            assert add(f"<< /Type /Pages /Count {len(kids)} /Kids [{' '.join(f'{k} 0 R' for k in kids)}] >>".encode())==pages_id
+            cat=add(f"<< /Type /Catalog /Pages {pages_id} 0 R >>".encode())
+            b=bytearray(b"%PDF-1.4\n"); offs=[]
+            for i,o in enumerate(objs,1):
+                offs.append(len(b)); b+=f"{i} 0 obj\n".encode()+o+b"\nendobj\n"
+            x=len(b); b+=f"xref\n0 {len(objs)+1}\n0000000000 65535 f \n".encode()+"".join(f"{o:010d} 00000 n \n" for o in offs).encode()
+            b+=f"trailer\n<< /Size {len(objs)+1} /Root {cat} 0 R >>\nstartxref\n{x}\n%%EOF\n".encode(); Path(path).write_bytes(b)
+        p1=[(72,780,20,"Monthly Statement"),(72,750,11,"This statement lists the items bought in October by the school office."),(72,736,11,"All amounts are in rupees and include GST."),
+            (72,700,11,"Item"),(250,700,11,"Qty"),(330,700,11,"Rate"),(450,700,11,"Amount")]
+        rows=[("Rice",2,"45.50","91.00"),("Notebook pack",10,"120.00","1,200.00"),("Printer paper",3,"310.00","930.00"),("Total","","","2,221.00")]
+        for i,(a,q,r,m) in enumerate(rows):
+            y=684-16*i; p1+=[(72,y,11,a),(250,y,11,str(q)),(330,y,11,r),(450,y,11,m)]
+        p2=[(72,780,16,"Notes"),(72,750,11,"Second page text for the Word test, with one short line."),(72,736,11,"Thank you.")]
+        text_pdf(d/'table.pdf',[p1,p2])
+        im=Image.new('RGB',(400,200),(30,120,200)); im.save(d/'pic.jpg',quality=90)
+        W='xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"'
+        def p(text,style=None,bold=False,num=None,br=False):
+            ppr=(f'<w:pStyle w:val="{style}"/>' if style else '')+(f'<w:numPr><w:ilvl w:val="0"/><w:numId w:val="{num}"/></w:numPr>' if num else '')
+            r=(f'<w:r><w:rPr>{"<w:b/>" if bold else ""}</w:rPr><w:t xml:space="preserve">{text}</w:t></w:r>')+('<w:r><w:br w:type="page"/></w:r>' if br else '')
+            return f'<w:p><w:pPr>{ppr}</w:pPr>{r}</w:p>'
+        img='<w:p><w:r><w:drawing><wp:inline><wp:extent cx="2540000" cy="1270000"/><wp:docPr id="1" name="p"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:blipFill><a:blip r:embed="rIdPic"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>'
+        tbl='<w:tbl><w:tblGrid><w:gridCol w:w="3000"/><w:gridCol w:w="2000"/></w:tblGrid>'+''.join(f'<w:tr><w:tc>{p(a)}</w:tc><w:tc>{p(b)}</w:tc></w:tr>' for a,b in (("Name","Marks"),("राम कुमार","88"),("Sita","92")))+'</w:tbl>'
+        body=p("Admission Letter","Heading1")+p("Dear parent,")+p("This is ",bold=False)+p("Important: fees are due on 10 December.",bold=True)+p("Bring the admit card",num=1)+p("Bring two photos",num=1)+p("नमस्ते, यह हिंदी पंक्ति है।")+tbl+img+p("End of first page",br=True)+p("Second page starts here.")
+        doc=f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document {W}><w:body>{body}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr></w:body></w:document>'
+        num='<?xml version="1.0" encoding="UTF-8"?><w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:numFmt w:val="decimal"/></w:lvl></w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num></w:numbering>'
+        with zipfile.ZipFile(d/'letter.docx','w',zipfile.ZIP_DEFLATED) as z:
+            z.writestr('[Content_Types].xml','<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="jpg" ContentType="image/jpeg"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>')
+            z.writestr('_rels/.rels','<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>')
+            z.writestr('word/document.xml',doc); z.writestr('word/numbering.xml',num)
+            z.writestr('word/_rels/document.xml.rels','<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdPic" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/pic.jpg"/></Relationships>')
+            z.write(d/'pic.jpg','word/media/pic.jpg')
+    make_office_files(d)
+    go('pdf-to-word');page.locator('#pdf-in').set_input_files(str(d/'table.pdf'));run()
+    dx=zipfile.ZipFile(get('table.docx'));doc=dx.read('word/document.xml').decode()
+    assert 'Monthly Statement' in doc and 'All amounts are in rupees and include GST.' in doc and doc.count('<w:tbl>')==1 and doc.count('<w:tr>')==5 and '<w:pageBreakBefore/>' in doc,doc[:400]
+    page.locator('#pw-mode').select_option('look');run();dx=zipfile.ZipFile(get('look.docx'));assert sorted(n for n in dx.namelist() if n.startswith('word/media/'))==['word/media/image1.jpeg','word/media/image2.jpeg']
+    go('pdf-to-excel');page.locator('#pdf-in').set_input_files(str(d/'table.pdf'));run()
+    xs=zipfile.ZipFile(get('table.xlsx'));sh=xs.read('xl/worksheets/sheet1.xml').decode()
+    assert '<c r="A5" t="inlineStr"><is><t xml:space="preserve">Rice</t></is></c><c r="B5"><v>2</v></c><c r="C5"><v>45.5</v></c><c r="D5"><v>91</v></c>' in sh,sh[:600]
+    assert '<c r="D6"><v>1200</v></c>' in sh and '<c r="D8"><v>2221</v></c>' in sh
+    page.locator('#px-sheets').select_option('each');run();assert zipfile.ZipFile(get('pages.xlsx')).read('xl/workbook.xml').decode().count('<sheet ')==2
+    # Round trip: our own Excel to PDF reads the new workbook.
+    go('sheet-pdf');page.locator('#sheet-file').set_input_files(str(d/'table.xlsx'));run();assert 'rows' in page.locator('#result').inner_text()
+    go('word-to-pdf');page.locator('#doc-file').set_input_files(str(d/'letter.docx'));run()
+    lp=PdfReader(get('letter.pdf'));assert len(lp.pages)==2,len(lp.pages)
+    im=lp.pages[0]['/Resources']['/XObject']['/Im0'].get_object();assert (im['/Width'],im['/Height'])==(1240,1754)
+    first=Image.open(__import__('io').BytesIO(im._data)).convert('L');assert first.crop((100,100,1140,300)).getextrema()[0]<80  # heading drawn near the top
+    blue=Image.open(__import__('io').BytesIO(im._data)).convert('RGB');assert sum(1 for x in range(150,560,20) for y in range(700,900,20) if blue.getpixel((x,y))[2]>150 and blue.getpixel((x,y))[0]<80)>20  # the picture
+    bad=d/'old.doc';bad.write_bytes(b'not a docx');go('word-to-pdf');page.locator('#doc-file').set_input_files(str(bad));page.locator('button[type=submit]').click()
+    expect(page.locator('#status')).to_have_class('error');assert '.docx' in page.locator('#status').inner_text()
+    go('edit-pdf');page.locator('#pdf-files').set_input_files(str(d/'table.pdf'));expect(page.locator('#ed-page')).to_contain_text('Page 1 of 2')
+    def drag(x1,y1,x2,y2):
+        page.evaluate("document.getElementById('ed-canvas').scrollIntoView({block:'start'})");b=page.locator('#ed-canvas').bounding_box()
+        page.mouse.move(b['x']+b['width']*x1,b['y']+b['height']*y1);page.mouse.down();page.mouse.move(b['x']+b['width']*x2,b['y']+b['height']*y2,steps=4);page.mouse.up()
+    page.locator('#ed-text').fill('Approved ठीक है');drag(.5,.05,.5,.05)
+    page.locator('[data-ed=white]').click();drag(.1,.115,.6,.14)
+    page.locator('[data-ed=mark]').click();drag(.1,.18,.9,.2)
+    page.locator('#ed-next').click();expect(page.locator('#ed-page')).to_contain_text('Page 2 of 2 · 3 changes');page.locator('[data-ed=white]').click();drag(.1,.1,.3,.12)
+    page.locator('#ed-undo').click();expect(page.locator('#ed-page')).to_contain_text('3 changes');run()
+    ep=PdfReader(get('edited.pdf'));t1=ep.pages[0].extract_text();assert 'All amounts' in t1 and len(ep.pages)==2  # white-out only covers
+    assert len(ep.pages[0]['/Resources']['/XObject'])==1 and '/XObject' not in (ep.pages[1].get('/Resources') or {})
+    go('edit-pdf');page.locator('#pdf-files').set_input_files(str(d/'table.pdf'));expect(page.locator('#ed-page')).to_contain_text('Page 1');page.locator('button[type=submit]').click()
+    expect(page.locator('#status')).to_have_class('error');assert 'at least one change' in page.locator('#status').inner_text()
+    print('PASS PDF to Word and Excel, Word to PDF and Edit PDF')
     # Image to text: same OCR engine, text only.
     go('image-text');page.locator('#files').set_input_files(str(p1));page.locator('#scan-ocr').select_option('eng');page.locator('button[type=submit]').click()
     expect(page.locator('#status')).to_have_text(re.compile(r'^Done'),timeout=180000);t=page.locator('#ocr-text').input_value();assert 'SMARTFILE' in t and '2026' in t,t
@@ -434,11 +514,11 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     hrefs=page.locator('.tile:visible').evaluate_all("(xs)=>xs.map(x=>x.getAttribute('href'))")
     assert sorted(hrefs)==['/hi/tools/exam-photo/','/hi/tools/sign-pdf/','/hi/tools/signature/'],hrefs
     page.locator('#clear-search').click()
-    assert page.locator('.tile:visible').count()==47
-    assert page.locator('.tile').count()==47
-    assert page.locator('.tile .tool-icon svg').count()==47
+    assert page.locator('.tile:visible').count()==51
+    assert page.locator('.tile').count()==51
+    assert page.locator('.tile .tool-icon svg').count()==51
     assert page.locator('.tool-group').count()==4
-    for slug in ('exam-photo','compress-pdf','id-card','sheet-pdf','unlock-pdf','scan-pdf','pdf-jpg','name-date','sign-pdf','image-text','mask-aadhaar','krutidev-unicode','lock-pdf','typing-test','resume-maker','fd-calculator','rd-calculator','sip-calculator','emi-calculator','gst-calculator','percentage-calculator','income-tax-calculator','upi-qr','amount-in-words','cgpa-calculator','bmi-calculator','compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf','photo-sheet','photo-studio','background-changer'):
+    for slug in ('exam-photo','compress-pdf','id-card','sheet-pdf','unlock-pdf','scan-pdf','pdf-jpg','name-date','sign-pdf','image-text','mask-aadhaar','krutidev-unicode','lock-pdf','typing-test','resume-maker','fd-calculator','rd-calculator','sip-calculator','emi-calculator','gst-calculator','percentage-calculator','income-tax-calculator','upi-qr','amount-in-words','cgpa-calculator','bmi-calculator','pdf-to-word','pdf-to-excel','word-to-pdf','edit-pdf','compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf','photo-sheet','photo-studio','background-changer'):
         page.goto(base+'/hi/tools/'+slug+'/')
         assert page.locator('html').get_attribute('lang')=='hi'
         assert page.locator('#fields label').count()>0
