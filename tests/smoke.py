@@ -37,15 +37,15 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
         with page.expect_download() as event: page.locator('#result a').click()
         path=d/name;event.value.save_as(path);return path
     page.goto(base)
-    assert page.locator('.tile').count()==24
-    assert page.locator('.tile .tool-icon svg').count()==24
+    assert page.locator('.tile').count()==25
+    assert page.locator('.tile .tool-icon svg').count()==25
     assert page.locator('.tool-group').count()==3
     shapes=page.locator('.tile svg').evaluate_all("(xs)=>xs.map(x=>x.innerHTML)")
-    assert len(set(shapes))==24
+    assert len(set(shapes))==25
     assert page.locator('.category-nav a').count()==3
     page.locator('.category-nav a').first.click()
     assert page.evaluate("location.hash")=='#group-pdf'
-    assert page.locator('#group-pdf .tile').count()==9
+    assert page.locator('#group-pdf .tile').count()==10
     search=page.locator('#tool-search')
     expect(search).to_be_visible()
     search.fill('merge pdf');assert page.locator('.tile:visible').count()==1
@@ -55,7 +55,7 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     search.fill('photo se pdf');assert page.locator('.tile:visible').count()==1
     search.fill('xyz-no-tool');assert page.locator('.tile:visible').count()==0
     expect(page.locator('#search-status')).to_contain_text('No tools found')
-    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==24
+    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==25
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     for width in (320,390,768,1280):
         page.set_viewport_size({'width':width,'height':844})
@@ -132,6 +132,37 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     box=sheet.point(lambda v:255 if v<200 else 0).getbbox();w,h=box[2]-box[0],box[3]-box[1]
     assert abs(w-(2*1011+118))<=6 and abs(h-(2*638+150))<=6,(box,w,h)
     assert 'Actual size' in page.locator('#result').inner_text()
+    # Excel to PDF: a 14-column, 151-row sheet with dates, rupee text and Hindi fits on 3 pages (5 at a fixed 10 pt).
+    import zipfile
+    def xlsx(path,rows):
+        ns='xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
+        strings=[];cells=[]
+        for ri,row in enumerate(rows,1):
+            cs=[]
+            for ci,v in enumerate(row):
+                ref=chr(65+ci)+str(ri)
+                if isinstance(v,tuple):cs.append(f'<c r="{ref}" s="1"><v>{v[0]}</v></c>')
+                elif isinstance(v,(int,float)):cs.append(f'<c r="{ref}"><v>{v}</v></c>')
+                else:strings.append(v);cs.append(f'<c r="{ref}" t="s"><v>{len(strings)-1}</v></c>')
+            cells.append(f'<row r="{ri}">'+''.join(cs)+'</row>')
+        with zipfile.ZipFile(path,'w',zipfile.ZIP_DEFLATED) as z:
+            z.writestr('[Content_Types].xml','<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>')
+            z.writestr('xl/workbook.xml',f'<workbook {ns}><sheets><sheet name="Fees" sheetId="1" r:id="rId1"/><sheet name="Hidden" sheetId="2" state="hidden" r:id="rId2"/></sheets></workbook>')
+            z.writestr('xl/_rels/workbook.xml.rels','<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="x" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="x" Target="worksheets/sheet1.xml"/></Relationships>')
+            z.writestr('xl/styles.xml','<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cellXfs count="2"><xf numFmtId="0"/><xf numFmtId="14"/></cellXfs></styleSheet>')
+            z.writestr('xl/sharedStrings.xml',f'<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+''.join(f'<si><t>{s}</t></si>' for s in strings)+'</sst>')
+            z.writestr('xl/worksheets/sheet1.xml',f'<worksheet {ns}><sheetData>'+''.join(cells)+'</sheetData></worksheet>')
+    head=['Roll No','Student name','Date','Class','Fee ₹','Paid','Due','Phone','City','विषय','Remarks','Status','Bank','Txn ID']
+    data=[head]+[[1000+i,f'Student {i} Kumar',(45000+i,),'XII-A',12500.5,10000,2500.5,'9876543210','Lucknow','गणित','Paid by UPI ₹ in two parts','OK','SBI',f'TXN{i:08d}'] for i in range(150)]
+    book=d/'fees.xlsx';xlsx(book,data)
+    go('sheet-pdf');page.locator('#sheet-file').set_input_files(str(book))
+    expect(page.locator('#sheet-name option')).to_have_count(2)
+    run();out=get('sheet.pdf');r=PdfReader(out);text=page.locator('#result').inner_text()
+    assert '151 rows × 14 columns → 3 pages' in text,text
+    assert len(r.pages)==3 and {round(float(p.mediabox[2])) for p in r.pages}<={595,842},(len(r.pages),text)
+    csv=d/'list.csv';csv.write_text('Name,Amount\n"Sharma, R",1200\nराम,₹ 50\n',encoding='utf-8')
+    go('sheet-pdf');page.locator('#sheet-file').set_input_files(str(csv));run();get('csv.pdf')
+    assert '3 rows × 2 columns → 1 page, portrait' in page.locator('#result').inner_text(),page.locator('#result').inner_text()
     go('photo-sheet');page.locator('#files').set_input_files(str(fixture));page.locator('#paper').select_option('4x6');page.locator('#copies').select_option('6');run()
     sheet=Image.open(get('sheet-6.jpg'));assert sheet.size==(1200,1800);assert '6 photos' in page.locator('#result').inner_text()
     page.locator('#paper').select_option('a4');page.locator('#copies').select_option('12');run()
@@ -185,11 +216,11 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     hrefs=page.locator('.tile:visible').evaluate_all("(xs)=>xs.map(x=>x.getAttribute('href'))")
     assert sorted(hrefs)==['/hi/tools/exam-photo/','/hi/tools/signature/'],hrefs
     page.locator('#clear-search').click()
-    assert page.locator('.tile:visible').count()==24
-    assert page.locator('.tile').count()==24
-    assert page.locator('.tile .tool-icon svg').count()==24
+    assert page.locator('.tile:visible').count()==25
+    assert page.locator('.tile').count()==25
+    assert page.locator('.tile .tool-icon svg').count()==25
     assert page.locator('.tool-group').count()==3
-    for slug in ('exam-photo','compress-pdf','id-card','compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf','photo-sheet','photo-studio','background-changer'):
+    for slug in ('exam-photo','compress-pdf','id-card','sheet-pdf','compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf','photo-sheet','photo-studio','background-changer'):
         page.goto(base+'/hi/tools/'+slug+'/')
         assert page.locator('html').get_attribute('lang')=='hi'
         assert page.locator('#fields label').count()>0
