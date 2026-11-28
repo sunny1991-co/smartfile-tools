@@ -52,15 +52,15 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
         with page.expect_download() as event: page.locator('#result a').click()
         path=d/name;event.value.save_as(path);return path
     page.goto(base)
-    assert page.locator('.tile').count()==25
-    assert page.locator('.tile .tool-icon svg').count()==25
+    assert page.locator('.tile').count()==26
+    assert page.locator('.tile .tool-icon svg').count()==26
     assert page.locator('.tool-group').count()==3
     shapes=page.locator('.tile svg').evaluate_all("(xs)=>xs.map(x=>x.innerHTML)")
-    assert len(set(shapes))==25
+    assert len(set(shapes))==26
     assert page.locator('.category-nav a').count()==3
     page.locator('.category-nav a').first.click()
     assert page.evaluate("location.hash")=='#group-pdf'
-    assert page.locator('#group-pdf .tile').count()==10
+    assert page.locator('#group-pdf .tile').count()==11
     search=page.locator('#tool-search')
     expect(search).to_be_visible()
     search.fill('merge pdf');assert page.locator('.tile:visible').count()==1
@@ -70,7 +70,7 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     search.fill('photo se pdf');assert page.locator('.tile:visible').count()==1
     search.fill('xyz-no-tool');assert page.locator('.tile:visible').count()==0
     expect(page.locator('#search-status')).to_contain_text('No tools found')
-    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==25
+    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==26
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     for width in (320,390,768,1280):
         page.set_viewport_size({'width':width,'height':844})
@@ -178,6 +178,19 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     csv=d/'list.csv';csv.write_text('Name,Amount\n"Sharma, R",1200\nराम,₹ 50\n',encoding='utf-8')
     go('sheet-pdf');page.locator('#sheet-file').set_input_files(str(csv));run();get('csv.pdf')
     assert '3 rows × 2 columns → 1 page, portrait' in page.locator('#result').inner_text(),page.locator('#result').inner_text()
+    # Unlock PDF: AES-256 (object streams), AES-128 and RC4 fixtures made with qpdf; owner password; restriction-only; errors.
+    fx=ROOT/'tests'/'fixtures'
+    for name,pw in (('locked-aes256','ABCD1990'),('locked-aes128','ABCD1990'),('locked-rc4','owner-secret'),('restricted-only','')):
+        go('unlock-pdf');page.locator('#pdf-files').set_input_files(str(fx/(name+'.pdf')));page.locator('#pdf-password').fill(pw);run()
+        out=get(name+'-open.pdf');r=PdfReader(out);assert not r.is_encrypted and len(r.pages)==3,name
+        assert 'unlock test page 2' in r.pages[1].extract_text() and r.metadata.title=='Encrypted statement (test)',name
+        # SHA-256 of the fixtures' embedded JPEG, read independently with qpdf/pikepdf when the fixtures were made.
+        assert {__import__('hashlib').sha256(p['/Resources']['/XObject']['/Im0'].get_object()._data).hexdigest() for p in r.pages}=={'a52daa6a314bac39a78768e65f0c33cfcbe5aa5505ce672a8e39d010a78578b6'},name
+    for name,pw,msg in (('locked-aes256','abcd1990','Wrong password'),('locked-rc4','','Wrong password')):
+        go('unlock-pdf');page.locator('#pdf-files').set_input_files(str(fx/(name+'.pdf')));page.locator('#pdf-password').fill(pw);page.locator('button[type=submit]').click()
+        expect(page.locator('#status')).to_have_class('error',timeout=30000);assert msg in page.locator('#status').inner_text() and page.locator('#result a').count()==0
+    go('unlock-pdf');page.locator('#pdf-files').set_input_files(str(heavy));page.locator('button[type=submit]').click()
+    expect(page.locator('#status')).to_have_text('This PDF is not password protected.',timeout=30000)
     go('photo-sheet');page.locator('#files').set_input_files(str(fixture));page.locator('#paper').select_option('4x6');page.locator('#copies').select_option('6');run()
     sheet=Image.open(get('sheet-6.jpg'));assert sheet.size==(1200,1800);assert '6 photos' in page.locator('#result').inner_text()
     page.locator('#paper').select_option('a4');page.locator('#copies').select_option('12');run()
@@ -231,11 +244,11 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     hrefs=page.locator('.tile:visible').evaluate_all("(xs)=>xs.map(x=>x.getAttribute('href'))")
     assert sorted(hrefs)==['/hi/tools/exam-photo/','/hi/tools/signature/'],hrefs
     page.locator('#clear-search').click()
-    assert page.locator('.tile:visible').count()==25
-    assert page.locator('.tile').count()==25
-    assert page.locator('.tile .tool-icon svg').count()==25
+    assert page.locator('.tile:visible').count()==26
+    assert page.locator('.tile').count()==26
+    assert page.locator('.tile .tool-icon svg').count()==26
     assert page.locator('.tool-group').count()==3
-    for slug in ('exam-photo','compress-pdf','id-card','sheet-pdf','compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf','photo-sheet','photo-studio','background-changer'):
+    for slug in ('exam-photo','compress-pdf','id-card','sheet-pdf','unlock-pdf','compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf','photo-sheet','photo-studio','background-changer'):
         page.goto(base+'/hi/tools/'+slug+'/')
         assert page.locator('html').get_attribute('lang')=='hi'
         assert page.locator('#fields label').count()>0
