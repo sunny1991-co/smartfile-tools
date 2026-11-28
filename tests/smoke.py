@@ -52,12 +52,12 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
         with page.expect_download() as event: page.locator('#result a').click()
         path=d/name;event.value.save_as(path);return path
     page.goto(base)
-    assert page.locator('.tile').count()==36
-    assert page.locator('.tile .tool-icon svg').count()==36
-    assert page.locator('.tool-group').count()==3
+    assert page.locator('.tile').count()==42
+    assert page.locator('.tile .tool-icon svg').count()==42
+    assert page.locator('.tool-group').count()==4
     shapes=page.locator('.tile svg').evaluate_all("(xs)=>xs.map(x=>x.innerHTML)")
-    assert len(set(shapes))==36
-    assert page.locator('.category-nav a').count()==3
+    assert len(set(shapes))==42
+    assert page.locator('.category-nav a').count()==4
     page.locator('.category-nav a').first.click()
     assert page.evaluate("location.hash")=='#group-pdf'
     assert page.locator('#group-pdf .tile').count()==15
@@ -70,7 +70,7 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     search.fill('photo se pdf');assert page.locator('.tile:visible').first.get_attribute('href')=='/tools/image-to-pdf/'
     search.fill('xyz-no-tool');assert page.locator('.tile:visible').count()==0
     expect(page.locator('#search-status')).to_contain_text('No tools found')
-    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==36
+    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==42
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     for width in (320,390,768,1280):
         page.set_viewport_size({'width':width,'height':844})
@@ -293,6 +293,25 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     expect(page.locator('#status')).to_have_text(re.compile(r'^Done'));assert page.locator('#kd-result').input_value()=='Jh d`".k fiz; fo|ky;'
     page.locator('#kd-direction').select_option('to-unicode');page.locator('#kd-text').fill('भारत');page.locator('button[type=submit]').click()
     expect(page.locator('#status')).to_contain_text('already Unicode');assert page.locator('#kd-result').count()==0
+    # Calculators: values checked against the standard formulas (bank FD/RD convention, SIP at month start, reducing-balance EMI).
+    def calc(slug,fill,ids=()):
+        go(slug)
+        for k,v in fill.items():
+            el=page.locator(k)
+            if el.evaluate('e=>e.tagName')=='SELECT': el.select_option(v)
+            else: el.fill(v)
+        run();return page.locator('#calc-result').inner_text()
+    r=calc('fd-calculator',{'#c-amount':'100000','#c-rate':'7','#c-years':'5','#c-months':'0'});assert '₹1,41,477.82' in r and '₹41,477.82' in r,r
+    r=calc('fd-calculator',{'#c-amount':'100000','#c-rate':'7','#c-years':'2','#c-months':'6','#c-freq':'0'});assert '₹1,17,500' in r,r
+    r=calc('rd-calculator',{'#c-amount':'5000','#c-rate':'6.5','#c-months':'60'});assert '₹3,54,954.1' in r and '₹3,00,000' in r,r
+    r=calc('sip-calculator',{'#c-amount':'5000','#c-rate':'12','#c-years':'10'});assert '₹11,61,695.38' in r and '₹6,00,000' in r,r;assert page.locator('#calc-years tr').count()==11
+    r=calc('emi-calculator',{'#c-amount':'1000000','#c-rate':'8.5','#c-years':'20','#c-months':'0'});assert '₹8,678.23' in r,r;assert page.locator('#calc-years tr').last.locator('td').last.inner_text()=='₹0'
+    r=calc('gst-calculator',{'#c-amount':'1180','#c-gst':'18','#c-mode':'remove'});assert '₹1,000' in r and '₹90 + ₹90' in r,r
+    r=calc('percentage-calculator',{'#c-kind':'is','#c-a':'450','#c-b':'600'});assert '75%' in r,r
+    r=calc('percentage-calculator',{'#c-kind':'change','#c-a':'80','#c-b':'60'});assert 'decrease 25%' in r,r
+    go('percentage-calculator');page.locator('#c-kind').select_option('is');page.locator('#c-a').fill('5');page.locator('#c-b').fill('0');page.locator('button[type=submit]').click()
+    expect(page.locator('#status')).to_have_class('error');assert page.locator('#calc-result').count()==0
+    print('PASS FD, RD, SIP, EMI, GST and percentage calculators')
     # Image to text: same OCR engine, text only.
     go('image-text');page.locator('#files').set_input_files(str(p1));page.locator('#scan-ocr').select_option('eng');page.locator('button[type=submit]').click()
     expect(page.locator('#status')).to_have_text(re.compile(r'^Done'),timeout=180000);t=page.locator('#ocr-text').input_value();assert 'SMARTFILE' in t and '2026' in t,t
@@ -393,11 +412,11 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     hrefs=page.locator('.tile:visible').evaluate_all("(xs)=>xs.map(x=>x.getAttribute('href'))")
     assert sorted(hrefs)==['/hi/tools/exam-photo/','/hi/tools/sign-pdf/','/hi/tools/signature/'],hrefs
     page.locator('#clear-search').click()
-    assert page.locator('.tile:visible').count()==36
-    assert page.locator('.tile').count()==36
-    assert page.locator('.tile .tool-icon svg').count()==36
-    assert page.locator('.tool-group').count()==3
-    for slug in ('exam-photo','compress-pdf','id-card','sheet-pdf','unlock-pdf','scan-pdf','pdf-jpg','name-date','sign-pdf','image-text','mask-aadhaar','krutidev-unicode','lock-pdf','typing-test','resume-maker','compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf','photo-sheet','photo-studio','background-changer'):
+    assert page.locator('.tile:visible').count()==42
+    assert page.locator('.tile').count()==42
+    assert page.locator('.tile .tool-icon svg').count()==42
+    assert page.locator('.tool-group').count()==4
+    for slug in ('exam-photo','compress-pdf','id-card','sheet-pdf','unlock-pdf','scan-pdf','pdf-jpg','name-date','sign-pdf','image-text','mask-aadhaar','krutidev-unicode','lock-pdf','typing-test','resume-maker','fd-calculator','rd-calculator','sip-calculator','emi-calculator','gst-calculator','percentage-calculator','compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf','photo-sheet','photo-studio','background-changer'):
         page.goto(base+'/hi/tools/'+slug+'/')
         assert page.locator('html').get_attribute('lang')=='hi'
         assert page.locator('#fields label').count()>0
