@@ -1,4 +1,4 @@
-# SmartFile Tools — pre-launch v0.4
+# KaagazKit (formerly SmartFile Tools) — pre-launch v0.4
 
 Static, mobile-first browser utilities. Eighteen tools: compression (20/50/100/200 KB presets), resize, signature, crop, ID photo crop, images to PDF, image format conversion, image size inspection, age, word count, PDF merge/page extraction, page removal, rotation, reordering, watermark, page numbers and QR generation. No account, remote runtime dependencies, paid API, ads or file uploads. PDF and QR libraries are bundled locally at build time.
 

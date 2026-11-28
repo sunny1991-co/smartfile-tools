@@ -42,3 +42,4 @@ nav a.language{border:1px solid var(--line);border-radius:8px;padding:2px 10px;c
 .typing-preview{margin:0;background:#fffdf3;border:1px dashed #d8c27a;border-radius:10px;padding:10px 14px;font-size:18px;line-height:1.8;min-height:48px;overflow-wrap:anywhere}
 .typing-result{border-collapse:collapse;width:100%;max-width:520px;margin:12px 0}.typing-result td{border:1px solid var(--line);padding:8px 12px}.typing-result td:last-child{font-weight:750;text-align:right}
 #result img.resume-preview{max-height:640px;box-shadow:0 2px 10px rgba(24,43,58,.12)}
+.brand{display:inline-flex;align-items:center;gap:9px}.brand-mark{width:34px;height:34px;flex:none;border-radius:8px}.brand-name{font-weight:inherit}

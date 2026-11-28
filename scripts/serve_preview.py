@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local-only SmartFile preview. Never bind to a public interface."""
+"""Local-only KaagazKit preview. Never bind to a public interface."""
 from pathlib import Path
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from functools import partial

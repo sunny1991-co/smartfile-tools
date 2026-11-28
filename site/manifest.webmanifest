@@ -1,6 +1,6 @@
 {
-  "name": "SmartFile Tools",
-  "short_name": "SmartFile",
+  "name": "KaagazKit",
+  "short_name": "KaagazKit",
   "description": "Private photo, PDF and Excel tools that run on your phone. Files are not uploaded.",
   "start_url": "/",
   "scope": "/",

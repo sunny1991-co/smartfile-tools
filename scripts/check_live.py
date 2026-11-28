@@ -1,4 +1,4 @@
-"""Independent, read-only check of the live SmartFile Pages deployment."""
+"""Independent, read-only check of the live KaagazKit Pages deployment."""
 import argparse
 import concurrent.futures
 import urllib.request
@@ -31,7 +31,7 @@ class Page(HTMLParser):
         if tag == "script": self.scripts.append(a.get("src", ""))
 
 def fetch(path):
-    req = urllib.request.Request(ORIGIN + path, headers={"User-Agent":"SmartFile-Release-Check/1.0","Accept-Encoding":"identity"})
+    req = urllib.request.Request(ORIGIN + path, headers={"User-Agent":"KaagazKit-Release-Check/1.0","Accept-Encoding":"identity"})
     with urllib.request.urlopen(req, timeout=15) as r:
         assert r.status == 200, (path, r.status)
         assert urlsplit(r.geturl()).netloc == urlsplit(ORIGIN).netloc, (path, r.geturl())
@@ -43,7 +43,7 @@ def check_page(path, mode):
     assert len(raw) <= 4 * 1024 * 1024, path
     text = raw.decode("utf-8")
     p = Page(text)
-    assert "SmartFile Tools" in text and "<h1>" in text, path
+    assert "KaagazKit" in text and "<h1>" in text, path
     assert p.lang == ("hi" if path.startswith("/hi/") else "en"), path
     if mode == "preview":
         assert "noindex" in p.robots, (path, "missing preview noindex")

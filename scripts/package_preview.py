@@ -15,7 +15,7 @@ assert len(list((output/'screenshots').glob('*.png')))==6
 for p in site.rglob('*'):
     assert not p.is_symlink(),p
 files=sorted(p for p in site.rglob('*') if p.is_file())
-readme='''SmartFile Tools — local preview, not a public launch.
+readme='''KaagazKit — local preview, not a public launch.
 Extract this inner ZIP into a new directory. Python 3 is the only requirement.
 In Termux, go into that directory and run: python serve_preview.py
 Then open http://127.0.0.1:8791/ in your phone browser.

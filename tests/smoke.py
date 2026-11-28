@@ -255,7 +255,7 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     with page.expect_download() as event: page.locator('#result a').first.click()
     out=d/'scan.pdf';event.value.save_as(out);r=PdfReader(out);assert len(r.pages)==2
     with page.expect_download() as event: page.locator('#result a').nth(1).click()
-    assert event.value.suggested_filename=='smartfile-scan-text.txt'
+    assert event.value.suggested_filename=='kaagazkit-scan-text.txt'
     pw,ph=r.pages[0].images[0].image.size;assert abs(pw/ph-1000/900)<.06,(pw,ph)
     text=page.locator('#ocr-text').input_value();assert 'SMARTFILE' in text and '2026' in text and '2027' in text,text
     assert 'background trimmed on 2' in page.locator('#result').inner_text()
@@ -382,7 +382,7 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
         if slug=='watermark-pdf':page.locator('#watermark').fill('DRAFT')
         page.locator('button[type=submit]').click();expect(page.locator('#status')).to_have_class('error',timeout=30000);assert page.locator('#result a').count()==0
     print('PASS PDF remove, reorder, rotate, watermark, page numbers, invalid selection and encrypted rejection')
-    for value in ('https://example.com/smartfile','नमस्ते SmartFile'):
+    for value in ('https://example.com/smartfile','नमस्ते KaagazKit'):
         go('qr');page.locator('#qr-text').fill(value);run();decoded=zxingcpp.read_barcode(Image.open(get('code.png')));assert decoded is not None and decoded.text==value,decoded
     print('PASS PDF merge/extract, invalid range, encrypted rejection and independently decoded QR')
     go('age');page.locator('#birth').fill('2000-02-29');page.locator('#asof').fill('2023-02-28');run();assert '23 years, 0 months, 0 days' in page.locator('#result').inner_text()
