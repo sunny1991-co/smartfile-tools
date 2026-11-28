@@ -37,11 +37,11 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
         with page.expect_download() as event: page.locator('#result a').click()
         path=d/name;event.value.save_as(path);return path
     page.goto(base)
-    assert page.locator('.tile').count()==23
-    assert page.locator('.tile .tool-icon svg').count()==23
+    assert page.locator('.tile').count()==24
+    assert page.locator('.tile .tool-icon svg').count()==24
     assert page.locator('.tool-group').count()==3
     shapes=page.locator('.tile svg').evaluate_all("(xs)=>xs.map(x=>x.innerHTML)")
-    assert len(set(shapes))==23
+    assert len(set(shapes))==24
     assert page.locator('.category-nav a').count()==3
     page.locator('.category-nav a').first.click()
     assert page.evaluate("location.hash")=='#group-pdf'
@@ -55,7 +55,7 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     search.fill('photo se pdf');assert page.locator('.tile:visible').count()==1
     search.fill('xyz-no-tool');assert page.locator('.tile:visible').count()==0
     expect(page.locator('#search-status')).to_contain_text('No tools found')
-    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==23
+    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==24
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     for width in (320,390,768,1280):
         page.set_viewport_size({'width':width,'height':844})
@@ -124,6 +124,14 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     assert len(r.pages)==3 and [tuple(p.mediabox) for p in r.pages]==[tuple(p.mediabox) for p in src.pages]
     go('compress-pdf');page.locator('#pdf-files').set_input_files(str(heavy));page.locator('#target-kb').fill('20');page.locator('button[type=submit]').click()
     expect(page.locator('#status')).to_have_class('error',timeout=60000);assert page.locator('#result a').count()==0
+    # ID card print: two copies of front+back at 85.6 x 54 mm (1011 x 638 px at 300 dpi) on A4.
+    fr=d/'front.png';bk=d/'back.png';Image.new('RGB',(1600,1000),(30,90,160)).save(fr);Image.new('RGB',(1600,1000),(160,60,30)).save(bk)
+    page.goto(base+'/tools/id-card/');page.locator('#front').wait_for();page.locator('#front').set_input_files(str(fr));page.locator('#back').set_input_files(str(bk));page.locator('#card-copies').select_option('2');run()
+    out=get('id.pdf');r=PdfReader(out);assert len(r.pages)==1 and [round(float(v)) for v in r.pages[0].mediabox]==[0,0,595,842]
+    sheet=r.pages[0].images[0].image.convert('L');assert sheet.size==(2480,3508)
+    box=sheet.point(lambda v:255 if v<200 else 0).getbbox();w,h=box[2]-box[0],box[3]-box[1]
+    assert abs(w-(2*1011+118))<=6 and abs(h-(2*638+150))<=6,(box,w,h)
+    assert 'Actual size' in page.locator('#result').inner_text()
     go('photo-sheet');page.locator('#files').set_input_files(str(fixture));page.locator('#paper').select_option('4x6');page.locator('#copies').select_option('6');run()
     sheet=Image.open(get('sheet-6.jpg'));assert sheet.size==(1200,1800);assert '6 photos' in page.locator('#result').inner_text()
     page.locator('#paper').select_option('a4');page.locator('#copies').select_option('12');run()
@@ -177,11 +185,11 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     hrefs=page.locator('.tile:visible').evaluate_all("(xs)=>xs.map(x=>x.getAttribute('href'))")
     assert sorted(hrefs)==['/hi/tools/exam-photo/','/hi/tools/signature/'],hrefs
     page.locator('#clear-search').click()
-    assert page.locator('.tile:visible').count()==23
-    assert page.locator('.tile').count()==23
-    assert page.locator('.tile .tool-icon svg').count()==23
+    assert page.locator('.tile:visible').count()==24
+    assert page.locator('.tile').count()==24
+    assert page.locator('.tile .tool-icon svg').count()==24
     assert page.locator('.tool-group').count()==3
-    for slug in ('exam-photo','compress-pdf','compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf','photo-sheet','photo-studio','background-changer'):
+    for slug in ('exam-photo','compress-pdf','id-card','compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf','photo-sheet','photo-studio','background-changer'):
         page.goto(base+'/hi/tools/'+slug+'/')
         assert page.locator('html').get_attribute('lang')=='hi'
         assert page.locator('#fields label').count()>0

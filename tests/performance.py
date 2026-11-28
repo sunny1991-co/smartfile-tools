@@ -58,7 +58,7 @@ def main():
                 assert all('/vendor/' not in x['name'] for x in sizes),sizes
                 total=sum(x['bytes'] for x in sizes)+page.evaluate("performance.getEntriesByType('navigation')[0].transferSize")
                 assert total<=100*1024,('homepage transfer',total)
-                assert page.locator('.tile svg').count()==23
+                assert page.locator('.tile svg').count()==24
                 assert page.locator('#tool-search').is_visible()
                 assert not any('/fonts/' in x['name'] for x in sizes),sizes
                 report['cases'].append({'case':'cold homepage simulated network','seconds':round(elapsed,3),'budget_seconds':5,'transfer_bytes':total})
