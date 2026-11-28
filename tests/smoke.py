@@ -52,15 +52,15 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
         with page.expect_download() as event: page.locator('#result a').click()
         path=d/name;event.value.save_as(path);return path
     page.goto(base)
-    assert page.locator('.tile').count()==28
-    assert page.locator('.tile .tool-icon svg').count()==28
+    assert page.locator('.tile').count()==31
+    assert page.locator('.tile .tool-icon svg').count()==31
     assert page.locator('.tool-group').count()==3
     shapes=page.locator('.tile svg').evaluate_all("(xs)=>xs.map(x=>x.innerHTML)")
-    assert len(set(shapes))==28
+    assert len(set(shapes))==31
     assert page.locator('.category-nav a').count()==3
     page.locator('.category-nav a').first.click()
     assert page.evaluate("location.hash")=='#group-pdf'
-    assert page.locator('#group-pdf .tile').count()==13
+    assert page.locator('#group-pdf .tile').count()==14
     search=page.locator('#tool-search')
     expect(search).to_be_visible()
     search.fill('merge pdf');assert page.locator('.tile:visible').count()==1
@@ -70,7 +70,7 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     search.fill('photo se pdf');assert page.locator('.tile:visible').count()==1
     search.fill('xyz-no-tool');assert page.locator('.tile:visible').count()==0
     expect(page.locator('#search-status')).to_contain_text('No tools found')
-    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==28
+    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==31
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     for width in (320,390,768,1280):
         page.set_viewport_size({'width':width,'height':844})
@@ -212,6 +212,9 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     text=page.locator('#ocr-text').input_value();assert 'SMARTFILE' in text and '2026' in text and '2027' in text,text
     assert 'background trimmed on 2' in page.locator('#result').inner_text()
     scan('hin+eng');mixed=page.locator('#ocr-text').input_value();assert 'SMARTFILE' in mixed and '2026' in mixed,mixed
+    # Image to text: same OCR engine, text only.
+    go('image-text');page.locator('#files').set_input_files(str(p1));page.locator('#scan-ocr').select_option('eng');page.locator('button[type=submit]').click()
+    expect(page.locator('#status')).to_have_text(re.compile(r'^Done'),timeout=180000);t=page.locator('#ocr-text').input_value();assert 'SMARTFILE' in t and '2026' in t,t
     deva=Path('/usr/share/fonts/truetype/freefont/FreeSans.ttf')  # installed by playwright --with-deps on Ubuntu
     if deva.exists():
         im=Image.new('RGB',(1600,1200),(45,40,38));dr=ImageDraw.Draw(im);dr.rectangle([300,150,1299,1049],fill=(245,243,236));fh=ImageFont.truetype(str(deva),72)
@@ -231,6 +234,31 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     expect(page.locator('#status')).to_have_text('This PDF needs a password. Enter it and try again.',timeout=30000)
     go('pdf-jpg');page.locator('#pdf-in').set_input_files(str(heavy));page.locator('#pdf-pages').fill('9');page.locator('button[type=submit]').click()
     expect(page.locator('#status')).to_have_text('Pages must be between 1 and 3.',timeout=30000)
+    # Name and date on photo: exam size, KB range, chosen date style; Hindi names work.
+    go('name-date');page.locator('#exam').select_option('upsc-photo');page.locator('#files').set_input_files(str(fixture))
+    page.locator('#nd-name').fill('Ram Kumar');page.locator('#nd-date').fill('2026-11-28');run()
+    out=get('nd.jpg');im=Image.open(out);kb=out.stat().st_size/1024;assert im.size==(500,500) and 20<=kb<=300,(im.size,kb)
+    strip=im.convert('L').crop((0,410,500,500));assert strip.getextrema()==(strip.getextrema()[0],255) and strip.getextrema()[0]<80,'name/date strip missing'
+    assert 'Date: 28-11-2026' in page.locator('#result').inner_text()
+    go('name-date');page.locator('#exam').select_option('ssc-photo');page.locator('#files').set_input_files(str(fixture));page.locator('#nd-name').fill('राम कुमार');page.locator('#nd-style').select_option('dd.mm.yyyy');page.locator('#nd-date').fill('2026-01-05');run()
+    assert Image.open(get('nd-hi.jpg')).size==(350,450) and '05.01.2026' in page.locator('#result').inner_text()
+    # Sign PDF: the paper is cut away (PNG with alpha) and the signature lands on the chosen pages only.
+    sig=d/'sig.jpg';sg=Image.new('RGB',(900,400),(236,233,226));dr=ImageDraw.Draw(sg)
+    for k in range(6):dr.line([(80+k*120,300-k*25),(150+k*120,90+k*20),(210+k*120,280)],fill=(15,25,90),width=9)
+    sg.save(sig,quality=90)
+    plain3=d/'plain3.pdf';Image.new('RGB',(1240,1754),'white').save(plain3,save_all=True,append_images=[Image.new('RGB',(1240,1754),'white')]*2,resolution=150)
+    base_imgs=[len(p.images) for p in PdfReader(plain3).pages]
+    def sign(where):
+        go('sign-pdf');page.locator('#pdf-files').set_input_files(str(plain3));page.locator('#sig-file').set_input_files(str(sig));page.locator('#sig-pages').select_option(where);run()
+        return PdfReader(get('signed-'+where+'.pdf'))
+    r=sign('last');assert [len(p.images) for p in r.pages]==[base_imgs[0],base_imgs[1],base_imgs[2]+1]
+    added=[x for x in r.pages[2].images if x.image.mode in ('RGBA','LA')];assert added,'signature has no transparency'
+    a=added[0].image.getchannel('A');assert a.getextrema()==(0,255) and sum(1 for v in a.getdata() if v==0)>a.size[0]*a.size[1]*.4,'paper not removed'
+    assert 'not a certified digital signature' in page.locator('#result').inner_text()
+    r=sign('all');assert [len(p.images) for p in r.pages]==[n+1 for n in base_imgs]
+    blank=d/'blank.png';Image.new('RGB',(400,200),'white').save(blank)
+    go('sign-pdf');page.locator('#pdf-files').set_input_files(str(plain3));page.locator('#sig-file').set_input_files(str(blank));page.locator('button[type=submit]').click()
+    expect(page.locator('#status')).to_have_text('No signature found. Sign with a dark pen on white paper and try again.',timeout=30000)
     go('photo-sheet');page.locator('#files').set_input_files(str(fixture));page.locator('#paper').select_option('4x6');page.locator('#copies').select_option('6');run()
     sheet=Image.open(get('sheet-6.jpg'));assert sheet.size==(1200,1800);assert '6 photos' in page.locator('#result').inner_text()
     page.locator('#paper').select_option('a4');page.locator('#copies').select_option('12');run()
@@ -282,13 +310,13 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     assert page.locator('html').get_attribute('lang')=='hi'
     page.locator('#tool-search').fill('हस्ताक्षर')
     hrefs=page.locator('.tile:visible').evaluate_all("(xs)=>xs.map(x=>x.getAttribute('href'))")
-    assert sorted(hrefs)==['/hi/tools/exam-photo/','/hi/tools/signature/'],hrefs
+    assert sorted(hrefs)==['/hi/tools/exam-photo/','/hi/tools/sign-pdf/','/hi/tools/signature/'],hrefs
     page.locator('#clear-search').click()
-    assert page.locator('.tile:visible').count()==28
-    assert page.locator('.tile').count()==28
-    assert page.locator('.tile .tool-icon svg').count()==28
+    assert page.locator('.tile:visible').count()==31
+    assert page.locator('.tile').count()==31
+    assert page.locator('.tile .tool-icon svg').count()==31
     assert page.locator('.tool-group').count()==3
-    for slug in ('exam-photo','compress-pdf','id-card','sheet-pdf','unlock-pdf','scan-pdf','pdf-jpg','compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf','photo-sheet','photo-studio','background-changer'):
+    for slug in ('exam-photo','compress-pdf','id-card','sheet-pdf','unlock-pdf','scan-pdf','pdf-jpg','name-date','sign-pdf','image-text','compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf','photo-sheet','photo-studio','background-changer'):
         page.goto(base+'/hi/tools/'+slug+'/')
         assert page.locator('html').get_attribute('lang')=='hi'
         assert page.locator('#fields label').count()>0
