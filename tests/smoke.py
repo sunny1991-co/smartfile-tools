@@ -37,11 +37,11 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
         with page.expect_download() as event: page.locator('#result a').click()
         path=d/name;event.value.save_as(path);return path
     page.goto(base)
-    assert page.locator('.tile').count()==21
-    assert page.locator('.tile .tool-icon svg').count()==21
+    assert page.locator('.tile').count()==22
+    assert page.locator('.tile .tool-icon svg').count()==22
     assert page.locator('.tool-group').count()==3
     shapes=page.locator('.tile svg').evaluate_all("(xs)=>xs.map(x=>x.innerHTML)")
-    assert len(set(shapes))==21
+    assert len(set(shapes))==22
     assert page.locator('.category-nav a').count()==3
     page.locator('.category-nav a').first.click()
     assert page.evaluate("location.hash")=='#group-pdf'
@@ -55,7 +55,7 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     search.fill('photo se pdf');assert page.locator('.tile:visible').count()==1
     search.fill('xyz-no-tool');assert page.locator('.tile:visible').count()==0
     expect(page.locator('#search-status')).to_contain_text('No tools found')
-    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==21
+    page.locator('#clear-search').click();assert page.locator('.tile:visible').count()==22
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     for width in (320,390,768,1280):
         page.set_viewport_size({'width':width,'height':844})
@@ -98,6 +98,21 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     page.locator('#subject-mode').select_option('transparent');page.locator('#files').set_input_files(str(d/'cutout.png'));page.locator('#background-mode').select_option('color');run()
     with Image.open(get('replaced.png')).convert('RGBA') as edited:assert edited.getpixel((5,5))==(240,245,255,255)
     print('PASS plain-background cutout, transparency and own-scene compositing pixel checks')
+    # Exam checker: wrong input is reported, fixed output meets exact pixels and KB range.
+    go('exam-photo');page.locator('#exam').select_option('ibps-signature')
+    assert page.locator('#width').input_value()=='140' and page.locator('#max-kb').input_value()=='20'
+    page.locator('#files').set_input_files(str(fixture));run()
+    assert page.locator('#result li[data-ok=no]').count()>=2
+    out=get('exam-sign.jpg');im=Image.open(out);kb=out.stat().st_size/1024
+    assert im.format=='JPEG' and im.size==(140,60) and 10<=kb<=20,(im.format,im.size,kb)
+    plain=d/'plain.png';Image.new('RGB',(900,700),'white').save(plain)
+    go('exam-photo');page.locator('#exam').select_option('ssc-photo');page.locator('#files').set_input_files(str(plain));run()
+    out=get('exam-photo.jpg');im=Image.open(out);im.load();kb=out.stat().st_size/1024
+    assert im.size==(350,450) and 20<=kb<=50,(im.size,kb)
+    assert page.locator('#result').inner_text().count('Blank metadata')==1
+    go('exam-photo');page.locator('#exam').select_option('custom');page.locator('#width').fill('3000');page.locator('#height').fill('3000');page.locator('#min-kb').fill('1');page.locator('#max-kb').fill('2')
+    page.locator('#files').set_input_files(str(fixture));page.locator('button[type=submit]').click()
+    expect(page.locator('#status')).to_have_class('error',timeout=30000);assert page.locator('#result a').count()==0
     go('photo-sheet');page.locator('#files').set_input_files(str(fixture));page.locator('#paper').select_option('4x6');page.locator('#copies').select_option('6');run()
     sheet=Image.open(get('sheet-6.jpg'));assert sheet.size==(1200,1800);assert '6 photos' in page.locator('#result').inner_text()
     page.locator('#paper').select_option('a4');page.locator('#copies').select_option('12');run()
@@ -148,14 +163,14 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     page.goto(base+'/hi/')
     assert page.locator('html').get_attribute('lang')=='hi'
     page.locator('#tool-search').fill('हस्ताक्षर')
-    assert page.locator('.tile:visible').count()==1
-    assert page.locator('.tile:visible').get_attribute('href')=='/hi/tools/signature/'
+    hrefs=page.locator('.tile:visible').evaluate_all("(xs)=>xs.map(x=>x.getAttribute('href'))")
+    assert sorted(hrefs)==['/hi/tools/exam-photo/','/hi/tools/signature/'],hrefs
     page.locator('#clear-search').click()
-    assert page.locator('.tile:visible').count()==21
-    assert page.locator('.tile').count()==21
-    assert page.locator('.tile .tool-icon svg').count()==21
+    assert page.locator('.tile:visible').count()==22
+    assert page.locator('.tile').count()==22
+    assert page.locator('.tile .tool-icon svg').count()==22
     assert page.locator('.tool-group').count()==3
-    for slug in ('compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf','photo-sheet','photo-studio','background-changer'):
+    for slug in ('exam-photo','compress','resize','signature','crop','passport','image-to-pdf','age','convert','inspect','merge-pdf','split-pdf','qr','words','remove-pdf-pages','rotate-pdf','reorder-pdf','watermark-pdf','number-pdf','photo-sheet','photo-studio','background-changer'):
         page.goto(base+'/hi/tools/'+slug+'/')
         assert page.locator('html').get_attribute('lang')=='hi'
         assert page.locator('#fields label').count()>0
