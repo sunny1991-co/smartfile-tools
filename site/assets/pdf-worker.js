@@ -136,6 +136,7 @@ progress("Reading PDF…","PDF पढ़ रहे हैं…");await breathe(
 const pages=doc.getPages(),num=v=>Number.isFinite(v)&&Math.abs(v)<1e6;progress("Adding your changes…","आपके बदलाव जोड़ रहे हैं…");
 for(const e of edits){const p=pages[(e&&e.page)-1];if(!p||![e.x,e.y,e.w,e.h].every(num)||e.w<0||e.h<0)fail("A change could not be placed. Reload and try again.");
 if(e.kind==="white")p.drawRectangle({x:e.x,y:e.y,width:e.w,height:e.h,color:PDFLib.rgb(1,1,1),borderWidth:0});
+else if(e.kind==="cover"&&Array.isArray(e.color)&&e.color.length===3&&e.color.every(v=>Number.isFinite(v)&&v>=0&&v<=255))p.drawRectangle({x:e.x,y:e.y,width:e.w,height:e.h,color:PDFLib.rgb(e.color[0]/255,e.color[1]/255,e.color[2]/255),borderWidth:0});
 else if(e.kind==="mark")p.drawRectangle({x:e.x,y:e.y,width:e.w,height:e.h,color:PDFLib.rgb(1,.89,.16),opacity:.4,borderWidth:0});
 else if(e.kind==="text"&&e.png instanceof Uint8Array&&e.png.length<8e6){const img=await doc.embedPng(e.png);p.drawImage(img,{x:e.x,y:e.y,width:e.w,height:e.h,rotate:PDFLib.degrees(Number(e.rotate)||0)});}
 else fail("A change could not be placed. Reload and try again.");}

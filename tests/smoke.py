@@ -404,7 +404,7 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     def drag(x1,y1,x2,y2):
         page.evaluate("document.getElementById('ed-canvas').scrollIntoView({block:'start'})");b=page.locator('#ed-canvas').bounding_box()
         page.mouse.move(b['x']+b['width']*x1,b['y']+b['height']*y1);page.mouse.down();page.mouse.move(b['x']+b['width']*x2,b['y']+b['height']*y2,steps=4);page.mouse.up()
-    page.locator('#ed-text').fill('Approved ठीक है');drag(.5,.05,.5,.05)
+    page.locator('[data-ed=text]').click();page.locator('#ed-text').fill('Approved ठीक है');drag(.5,.05,.5,.05)
     page.locator('[data-ed=white]').click();drag(.1,.115,.6,.14)
     page.locator('[data-ed=mark]').click();drag(.1,.18,.9,.2)
     page.locator('#ed-next').click();expect(page.locator('#ed-page')).to_contain_text('Page 2 of 2 · 3 changes');page.locator('[data-ed=white]').click();drag(.1,.1,.3,.12)
@@ -413,7 +413,26 @@ with tempfile.TemporaryDirectory() as td,sync_playwright() as p:
     assert len(ep.pages[0]['/Resources']['/XObject'])==1 and '/XObject' not in (ep.pages[1].get('/Resources') or {})
     go('edit-pdf');page.locator('#pdf-files').set_input_files(str(d/'table.pdf'));expect(page.locator('#ed-page')).to_contain_text('Page 1');page.locator('button[type=submit]').click()
     expect(page.locator('#status')).to_have_class('error');assert 'at least one change' in page.locator('#status').inner_text()
-    print('PASS PDF to Word and Excel, Word to PDF and Edit PDF')
+    # Edit text: tap a word in a browser-made PDF (embedded subset fonts), change it; the cover uses the page colour and the new text matches size and colour.
+    rp=browser.new_page();rp.set_content('<style>@page{margin:0}body{margin:0;font-family:serif;font-size:20px}p{position:absolute;margin:0;left:80px}</style><p style="top:100px">Received from <b>Ramesh Kumar</b> today.</p><p style="top:160px;color:#a01010">Due date: 10 December 2026</p>');(d/'receipt.pdf').write_bytes(rp.pdf(format='A4'));rp.close()
+    go('edit-pdf');page.locator('#pdf-files').set_input_files(str(d/'receipt.pdf'));expect(page.locator('#ed-page')).to_contain_text('Page 1 of 1')
+    def tap(xpx,ypx):  # CSS pixels of the source page; 1px = 0.75pt
+        page.evaluate("document.getElementById('ed-canvas').scrollIntoView({block:'start'})");b=page.locator('#ed-canvas').bounding_box();page.mouse.click(b['x']+b['width']*xpx*.75/595.28,b['y']+b['height']*ypx*.75/841.89)
+    tap(260,112);assert page.locator('#ed-text').input_value()=='Ramesh Kumar',page.locator('#ed-text').input_value()
+    page.locator('#ed-text').fill('Suresh Sharma');page.locator('#ed-apply').click();expect(page.locator('#ed-page')).to_contain_text('1 change')
+    tap(150,172);assert page.locator('#ed-text').input_value()=='Due date: 10 December 2026',page.locator('#ed-text').input_value()
+    page.locator('#ed-text').fill('Due date: 15 January 2027');page.locator('#ed-text').press('Enter');expect(page.locator('#ed-page')).to_contain_text('2 changes')
+    tap(600,700);expect(page.locator('#status')).to_have_class('error');run()
+    rr=PdfReader(get('receipt-edited.pdf'));xo=rr.pages[0]['/Resources']['/XObject'];assert len(xo)==2
+    content=b''.join(c.get_object().get_data() for c in (rr.pages[0]['/Contents'] if isinstance(rr.pages[0]['/Contents'],list) else [rr.pages[0]['/Contents']]))
+    assert content.count(b'1 1 1 rg')>=2,content[-400:]  # page-coloured covers (white page)
+    reds=[]
+    for k in xo:
+        img=xo[k].get_object().decode_as_image().convert('RGBA')
+        px=[p for p in img.getdata() if p[3]>200];assert px,'empty text picture'
+        reds.append(sum(1 for p in px if p[0]>120 and p[1]<80 and p[2]<80)/len(px))
+    assert max(reds)>.5 and min(reds)<.1,reds  # the red line stays red, the black name stays black
+    print('PASS PDF to Word and Excel, Word to PDF and Edit PDF (including Edit text in the same font)')
     # Image to text: same OCR engine, text only.
     go('image-text');page.locator('#files').set_input_files(str(p1));page.locator('#scan-ocr').select_option('eng');page.locator('button[type=submit]').click()
     expect(page.locator('#status')).to_have_text(re.compile(r'^Done'),timeout=180000);t=page.locator('#ocr-text').input_value();assert 'SMARTFILE' in t and '2026' in t,t
